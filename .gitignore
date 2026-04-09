@@ -1,0 +1,16 @@
+resources/
+
+.venv/
+env/
+__pycache__/
+*.pyc
+
+data/
+experiments/logs/
+experiments/checkpoints/
+
+.ipynb_checkpoints/
+
+*.log
+
+.DS_Store
