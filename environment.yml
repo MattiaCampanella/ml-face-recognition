@@ -6,14 +6,15 @@ channels:
 dependencies:
   - python=3.10
   - pip
+  - numpy=1.23.5
   - pytorch
   - torchvision
   - torchaudio
   - pytorch-cuda=11.8 # Modificare a seconda del target
   # Add other conda packages here
   - pip:
-      - numpy
       - pandas
+      - pillow
       - matplotlib
       - scikit-learn
       - pyyaml

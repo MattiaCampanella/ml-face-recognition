@@ -51,7 +51,7 @@ Obiettivo: implementare una pipeline riproducibile end-to-end per riconoscimento
 
 ### Relevant files
 - c:/uni/ml-face-recognition/environment.yml - aggiungere dipendenze minime mancanti (pillow, scikit-image, pytest, eventuale libreria metric learning).
-- c:/uni/ml-face-recognition/src/datasets/casia_webface.py - indicizzazione immagini per identità, split disgiunti, serializzazione split.
+- c:/uni/ml-face-recognition/src/datasets/make_split.py - indicizzazione immagini per identità, split disgiunti, serializzazione split.
 - c:/uni/ml-face-recognition/src/datasets/face_dataset.py - Dataset PyTorch con augmentazioni differenziate train/eval.
 - c:/uni/ml-face-recognition/src/datasets/loaders.py - DataLoader e PK sampler per triplet.
 - c:/uni/ml-face-recognition/src/models/resnet_backbone.py - backbone ResNet-18 con output embedding.
@@ -66,7 +66,7 @@ Obiettivo: implementare una pipeline riproducibile end-to-end per riconoscimento
 - c:/uni/ml-face-recognition/src/utils/config.py - parsing/validazione configurazioni.
 - c:/uni/ml-face-recognition/src/utils/seed.py - determinismo run.
 - c:/uni/ml-face-recognition/src/utils/logger.py - logging file + tensorboard.
-- c:/uni/ml-face-recognition/experiments/configs/baseline.yaml - iperparametri baseline.
+- c:/uni/ml-face-recognition/experiments/configs/base.yaml - iperparametri baseline.
 - c:/uni/ml-face-recognition/experiments/configs/triplet_hardmining.yaml - iperparametri triplet.
 - c:/uni/ml-face-recognition/README.md - istruzioni riproduzione complete.
 - c:/uni/ml-face-recognition/docs/REPORT.md - report tecnico finale.

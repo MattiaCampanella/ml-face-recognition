@@ -30,26 +30,53 @@ conda activate dl-project
 ```
 
 **Dataset:**
-Explain in 2 lines where to download the data from and in which folder it needs to reside (e.g., `data/raw/`).
+Download CASIA-WebFace from [the official repository](http://www.cbsr.ia.ac.cn/english/CASIA-WebFace-Database.html) and place `train.rec`, `train.idx`, and `train.lst` in `data/casia-webface/`.
+
+The dataset uses MXNet RecordIO format (`.rec`/`.idx` binary files). To extract images to disk, use the dedicated extraction environment (Python 3.7 with legacy mxnet support):
+
+```bash
+# Create extraction environment (one-time setup)
+conda env create -f environment.extract.yml
+conda activate dataset-extraction
+
+# Extract .rec images to default directory (data/casia-webface/)
+python src/datasets/extract_casia_rec.py
+
+# Return to main environment
+conda activate dl-project
+```
+
+After extraction, generate identity-disjoint train/val/test splits:
+
+```bash
+python src/datasets/make_split.py --data-root data/casia-webface --output data/splits/casia_identity_split_v1.json
+```
 
 ### 2. Network Training
 Provide the **exact commands** to start the training.
 
 **Baseline Training:**
 ```bash
-python -m src.training.train --config experiments/configs/baseline.yaml
+python -m src.training.train --config experiments/configs/base.yaml
 ```
 
 **Improved Model Training:**
 ```bash
-python -m src.training.train --config experiments/configs/model_v1.yaml
+python -m src.training.train --config experiments/configs/triplet_hardmining.yaml
+```
+
+**On the cluster:**
+```bash
+bash cluster/train.sh
+# or, to submit training + evaluation together
+bash cluster/run_all.sh --config=experiments/configs/triplet_hardmining.yaml
 ```
 
 ### 3. Evaluation
 Provide the commands to reproduce the numbers in your summary table.
 
 ```bash
-python -m src.evaluation.evaluate --config experiments/configs/model_v1.yaml
+python -m src.evaluation.evaluate --config experiments/configs/triplet_hardmining.yaml
 ```
 
 ---
