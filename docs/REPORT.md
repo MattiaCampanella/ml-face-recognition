@@ -1,8 +1,6 @@
-> **NOTE:** This is the template for your report. Delete this note block before submission.
-
-# [Project Title]
-- **Group ID**: [E.g., G07]
-- **Project ID**: [E.g., 1]
+# Metric Learning for Face Recognition
+- **Group ID**: G25
+- **Project ID**: 1
 
 ---
 

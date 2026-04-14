@@ -14,3 +14,4 @@ experiments/checkpoints/
 *.log
 
 .DS_Store
+experiments/runs

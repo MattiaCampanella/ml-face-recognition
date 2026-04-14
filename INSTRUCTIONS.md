@@ -49,28 +49,6 @@ Obiettivo: implementare una pipeline riproducibile end-to-end per riconoscimento
 8. Fase 4 - Confronto e analisi (settimana 5): rieseguire valutazione retrieval e clustering su modello triplet, confrontare con baseline in tabelle finali, raccogliere esempi qualitativi top-k corretti/errati. Dipende da 4-5-7.
 9. Fase 4 - Reproducibilità e consegna (settimana 6): completare README con comandi reali train/eval, completare REPORT con metodologia/risultati/limiti, dichiarare uso AI, verifica run pulito da ambiente nuovo. Dipende da 8.
 
-### Relevant files
-- c:/uni/ml-face-recognition/environment.yml - aggiungere dipendenze minime mancanti (pillow, scikit-image, pytest, eventuale libreria metric learning).
-- c:/uni/ml-face-recognition/src/datasets/make_split.py - indicizzazione immagini per identità, split disgiunti, serializzazione split.
-- c:/uni/ml-face-recognition/src/datasets/face_dataset.py - Dataset PyTorch con augmentazioni differenziate train/eval.
-- c:/uni/ml-face-recognition/src/datasets/loaders.py - DataLoader e PK sampler per triplet.
-- c:/uni/ml-face-recognition/src/models/resnet_backbone.py - backbone ResNet-18 con output embedding.
-- c:/uni/ml-face-recognition/src/models/classification_head.py - testa classificativa baseline.
-- c:/uni/ml-face-recognition/src/models/losses.py - triplet loss + hard mining utilities.
-- c:/uni/ml-face-recognition/src/training/train.py - entrypoint CLI basato su config.
-- c:/uni/ml-face-recognition/src/training/trainer.py - loop epoche, validation, checkpoint, early stopping opzionale.
-- c:/uni/ml-face-recognition/src/evaluation/retrieval.py - indicizzazione embedding e ricerca nearest neighbors.
-- c:/uni/ml-face-recognition/src/evaluation/metrics.py - mAP@1/5/10 e metriche retrieval complementari.
-- c:/uni/ml-face-recognition/src/evaluation/clustering.py - PCA/t-SNE + export figure.
-- c:/uni/ml-face-recognition/src/evaluation/evaluate.py - orchestration valutazione unica da checkpoint.
-- c:/uni/ml-face-recognition/src/utils/config.py - parsing/validazione configurazioni.
-- c:/uni/ml-face-recognition/src/utils/seed.py - determinismo run.
-- c:/uni/ml-face-recognition/src/utils/logger.py - logging file + tensorboard.
-- c:/uni/ml-face-recognition/experiments/configs/base.yaml - iperparametri baseline.
-- c:/uni/ml-face-recognition/experiments/configs/triplet_hardmining.yaml - iperparametri triplet.
-- c:/uni/ml-face-recognition/README.md - istruzioni riproduzione complete.
-- c:/uni/ml-face-recognition/docs/REPORT.md - report tecnico finale.
-
 ### Verification
 1. Verifica dati: script check che conferma disgiunzione identità tra split e conta immagini/identità per split.
 2. Verifica training baseline: avvio train con baseline config su subset ridotto, controllo che loss decresca e checkpoint venga scritto.
