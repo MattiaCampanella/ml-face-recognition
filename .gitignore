@@ -16,3 +16,5 @@ experiments/runs/
 
 .DS_Store
 
+# Kaggle Credentials
+credentials.json

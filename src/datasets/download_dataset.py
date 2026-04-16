@@ -1,11 +1,26 @@
 import os
+import json
 import zipfile
 import requests
 from requests.auth import HTTPBasicAuth
 from tqdm import tqdm
 
-USER = "c0mplx"
-API_KEY = "KGAT_eac472f3e765b7b0ac041f3846d4ee3b"
+# Leggi le credenziali dal file credentials.json
+credentials_path = os.path.join(os.path.dirname(__file__), "..", "..", "credentials.json")
+credentials_path = os.path.abspath(credentials_path)
+
+if not os.path.exists(credentials_path):
+    raise FileNotFoundError(
+        f"File delle credenziali non trovato: {credentials_path}\n"
+        "Crea un file 'credentials.json' nella root del progetto con il formato:\n"
+        '{"username": "<kaggle_user>", "api_key": "<kaggle_api_key>"}'
+    )
+
+with open(credentials_path, "r") as f:
+    creds = json.load(f)
+
+USER = creds["username"]
+API_KEY = creds["api_key"]
 
 owner = "debarghamitraroy"
 dataset = "casia-webface"
