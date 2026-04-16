@@ -18,7 +18,8 @@ $SSH_KEY = Join-Path $HOME ".ssh\id_ed25519"
 $SSH_PUBKEY = Join-Path $HOME ".ssh\id_ed25519.pub"
 
 function Test-RemoteHasContent([string]$remotePath) {
-    $probe = Invoke-SshCommand "if [ -d '$remotePath' ] && [ \"`$(find '$remotePath' -mindepth 1 -print -quit 2>/dev/null)\" ]; then echo 1; else echo 0; fi"
+    $cmd = 'if [ -d "' + $remotePath + '" ] && [ "$(find "' + $remotePath + '" -mindepth 1 -print -quit 2>/dev/null)" ]; then echo 1; else echo 0; fi'
+    $probe = Invoke-SshCommand $cmd
     return (($probe | Out-String).Trim() -eq "1")
 }
 
@@ -85,7 +86,7 @@ function Upload {
     Get-ChildItem -Path $LOCAL -Directory -Recurse -Filter "__pycache__" |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-    Invoke-SshCommand "mkdir -p $REMOTE_PROJECT_DIR/experiments/configs $REMOTE_PROJECT_DIR/experiments/runs $REMOTE_PROJECT_DIR/logs $REMOTE_PROJECT_DIR/data $REMOTE_PROJECT_DIR/data/splits" | Out-Null
+    Invoke-SshCommand "mkdir -p $REMOTE_PROJECT_DIR/experiments/configs $REMOTE_PROJECT_DIR/experiments/runs $REMOTE_PROJECT_DIR/logs $REMOTE_PROJECT_DIR/data $REMOTE_PROJECT_DIR/data/splits $REMOTE_PROJECT_DIR/pretrained_weights" | Out-Null
 
     $codeItems = @(
         "src",
@@ -95,7 +96,8 @@ function Upload {
         "INSTRUCTIONS.md",
         "LICENSE",
         "experiments/configs",
-        "data/splits"
+        "data/splits",
+        "pretrained_weights"
     )
 
     foreach ($item in $codeItems) {
@@ -113,21 +115,21 @@ function Upload {
             Invoke-ScpCommand @('-q', $localPath, "${REMOTE}/")
         }
     }
-
-    $localDatasetDir = Join-Path $LOCAL "data\casia-webface"
-    $remoteDatasetDir = "$REMOTE_PROJECT_DIR/data/casia-webface"
-    if (Test-Path $localDatasetDir -PathType Container) {
-        if (Test-RemoteHasContent $remoteDatasetDir) {
-            Write-Host "[SKIP] Dataset already present on cluster: data/casia-webface" -ForegroundColor Yellow
-        } else {
-            Write-Host "Uploading dataset to cluster (first-time only)..." -ForegroundColor Cyan
-            Invoke-ScpCommand @('-rq', $localDatasetDir, "${REMOTE}/data/")
-            Write-Host "Dataset upload complete." -ForegroundColor Green
-        }
-    } else {
-        Write-Host "[SKIP] Local dataset folder not found: data/casia-webface" -ForegroundColor Yellow
-    }
-
+    
+    # $localDatasetDir = Join-Path $LOCAL "data\casia-webface"
+    # $remoteDatasetDir = "$REMOTE_PROJECT_DIR/data/casia-webface"
+    # if (Test-Path $localDatasetDir -PathType Container) {
+    #     if (Test-RemoteHasContent $remoteDatasetDir) {
+    #         Write-Host "[SKIP] Dataset already present on cluster: data/casia-webface" -ForegroundColor Yellow
+    #     } else {
+    #         Write-Host "Uploading dataset to cluster (first-time only)..." -ForegroundColor Cyan
+    #         Invoke-ScpCommand @('-rq', $localDatasetDir, "${REMOTE}/data/")
+    #         Write-Host "Dataset upload complete." -ForegroundColor Green
+    #     }
+    # } else {
+    #     Write-Host "[SKIP] Local dataset folder not found: data/casia-webface" -ForegroundColor Yellow
+    # }
+    
     $localRunsDir = Join-Path $LOCAL "experiments\runs"
     $remoteRunsDir = "$REMOTE_PROJECT_DIR/experiments/runs"
     if (Test-Path $localRunsDir -PathType Container) {

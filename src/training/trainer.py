@@ -123,7 +123,7 @@ def run_train_epoch(
 ) -> EpochMetrics:
     model.train()
 
-    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled and device.type == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled and device.type == "cuda")
 
     total_loss = 0.0
     total_correct = 0
@@ -136,7 +136,7 @@ def run_train_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        with torch.cuda.amp.autocast(enabled=amp_enabled and device.type == "cuda"):
+        with torch.amp.autocast("cuda", enabled=amp_enabled and device.type == "cuda"):
             logits = _forward_logits(model, images)
             loss = criterion(logits, labels)
 
@@ -546,7 +546,7 @@ def run_triplet_epoch(
     log_every_steps: int = 50,
 ) -> TripletEpochMetrics:
     model.train()
-    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled and device.type == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled and device.type == "cuda")
 
     total_loss = 0.0
     total_valid_anchors = 0
@@ -562,7 +562,7 @@ def run_triplet_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        with torch.cuda.amp.autocast(enabled=amp_enabled and device.type == "cuda"):
+        with torch.amp.autocast("cuda", enabled=amp_enabled and device.type == "cuda"):
             embeddings = _forward_embeddings(model, images)
             loss, stats = batch_hard_triplet_loss(
                 embeddings,

@@ -8,10 +8,11 @@ __pycache__/
 data/
 experiments/logs/
 experiments/checkpoints/
+experiments/runs/
 
 .ipynb_checkpoints/
 
 *.log
 
 .DS_Store
-experiments/runs
+

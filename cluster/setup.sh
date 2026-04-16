@@ -1,111 +1,140 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# ============================================================================
+# Setup one-tantum per il cluster DMI -- Face Recognition
+#
+# Uso (dal login node):
+#   cd ~/ml-face-recognition
+#   bash cluster/setup.sh
+#
+# Lo script rilancia se stesso dentro srun + Apptainer automaticamente.
+# ============================================================================
+
+# -- 0. Auto-rilancio dentro srun + Apptainer se siamo sul login node ----------
+if [ -z "$APPTAINER_CONTAINER" ]; then
+    echo "Login node rilevato -> rilancio inside srun + Apptainer..."
+    ACCOUNT="${SLURM_ACCOUNT:-dl-course-q2}"
+    exec srun --account "$ACCOUNT" --partition "$ACCOUNT" --qos gpu-xlarge \
+         --gres=gpu:1 --gres=shard:22000 --mem=48G --cpus-per-task=8 \
+         apptainer run --nv /shared/sifs/latest.sif \
+         bash "$0" "$@"
+fi
+
+set -e
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJ_DIR"
 
-mkdir -p logs experiments/runs
-
-# Optional sync toggle for uploading local assets to a remote cluster login node.
-SYNC_TO_CLUSTER="${SYNC_TO_CLUSTER:-0}"
-CLUSTER_HOST="${CLUSTER_HOST:-}"
-CLUSTER_PROJECT_DIR="${CLUSTER_PROJECT_DIR:-}"
-LOCAL_DATA_DIR="${LOCAL_DATA_DIR:-data/casia-webface}"
-LOCAL_WEIGHTS_DIR="${LOCAL_WEIGHTS_DIR:-experiments/runs}"
-FORCE_SYNC_DATASET="${FORCE_SYNC_DATASET:-0}"
-FORCE_SYNC_WEIGHTS="${FORCE_SYNC_WEIGHTS:-0}"
+mkdir -p logs experiments/runs experiments/checkpoints experiments/logs data
 
 echo "=== Face Recognition Cluster Setup ==="
 echo "Project root: $PROJ_DIR"
-if command -v python >/dev/null 2>&1; then
-    PYTHON=python
-elif command -v python3 >/dev/null 2>&1; then
-    PYTHON=python3
+echo ""
+
+# -- 1. Rilevamento Python e GPU -----------------------------------------------
+if command -v python3 &>/dev/null; then
+    PY=python3
+elif command -v python &>/dev/null; then
+    PY=python
 else
-    echo "Python interpreter not found."
+    echo "ERRORE: Python non trovato!"
     exit 1
 fi
-echo "Python: $($PYTHON --version 2>&1)"
+echo "   Python: $($PY --version 2>&1)"
+
+GPU_INFO=$($PY -c "
+import torch
+print(f'  PyTorch: {torch.__version__}')
+print(f'  CUDA available: {torch.cuda.is_available()}')
+if torch.cuda.is_available():
+    name = torch.cuda.get_device_name(0)
+    cc = torch.cuda.get_device_capability()
+    vram = torch.cuda.get_device_properties(0).total_mem / 1e9
+    print(f'  GPU: {name} (CC {cc[0]}.{cc[1]}, {vram:.1f} GB)')
+else:
+    print('  GPU: NESSUNA GPU rilevata')
+" 2>/dev/null) || echo "  (PyTorch non ancora installato, GPU check dopo installazione)"
+
+echo "$GPU_INFO"
+
+# -- 2. Installazione dipendenze -----------------------------------------------
+echo ""
+echo "Installazione dipendenze..."
+pip install --user -r cluster/requirements.txt
+echo "   Dipendenze installate."
+
+# -- 3. Verifica installazione -------------------------------------------------
+echo ""
+echo "Verifica installazione..."
+$PY -c "
+import torch, torchvision
+print(f'  PyTorch:      {torch.__version__}')
+print(f'  TorchVision:  {torchvision.__version__}')
+print(f'  CUDA:         {torch.cuda.is_available()}')
+if torch.cuda.is_available():
+    print(f'  GPU:          {torch.cuda.get_device_name(0)}')
+try:
+    import sklearn
+    print(f'  scikit-learn: {sklearn.__version__}')
+except ImportError:
+    print(f'  scikit-learn: NON installato')
+try:
+    import yaml
+    print(f'  PyYAML:       {yaml.__version__}')
+except ImportError:
+    print(f'  PyYAML:       NON installato')
+try:
+    import PIL
+    print(f'  Pillow:       {PIL.__version__}')
+except ImportError:
+    print(f'  Pillow:       NON installato')
+try:
+    import tensorboard
+    print(f'  TensorBoard:  {tensorboard.__version__}')
+except ImportError:
+    print(f'  TensorBoard:  NON installato')
+"
+
+# -- 4. Download e estrazione dataset ------------------------------------------
 echo ""
 
-$PYTHON - <<'PY'
-import importlib
+# Controlla se le immagini estratte esistono già (una sottocartella con .jpg)
+EXTRACTED=$(find data/casia-webface -name "*.jpg" 2>/dev/null | head -1)
 
-modules = ["torch", "torchvision", "sklearn", "yaml", "PIL"]
-for module_name in modules:
-    module = importlib.import_module(module_name)
-    version = getattr(module, "__version__", "unknown")
-    print(f"{module_name}: {version}")
-PY
-
-echo ""
-if [ -f "data/casia-webface/train.lst" ]; then
-    echo "Dataset root: data/casia-webface (found)"
+if [ -n "$EXTRACTED" ]; then
+    echo "Dataset già estratto: data/casia-webface (found)"
 else
-    echo "Dataset root: data/casia-webface (missing)"
+    # Download dataset da Kaggle
+    if [ -f "data/casia-webface/train.rec" ]; then
+        echo "Dataset .rec già scaricato, skip download."
+    else
+        echo "Download dataset da Kaggle..."
+        $PY src/datasets/download_dataset.py
+    fi
+
+    # Estrazione immagini da .rec
+    if [ -f "data/casia-webface/train.rec" ]; then
+        echo "Installazione mxnet per estrazione..."
+        pip install --user -r cluster/requirements_extract.txt
+        echo "Estrazione immagini dal dataset .rec..."
+        $PY -m src.datasets.extract_casia_rec --data-root data/casia-webface
+    else
+        echo "[WARN] train.rec non trovato, impossibile estrarre il dataset."
+    fi
 fi
 
 if [ -f "data/splits/casia_identity_split_v1.json" ]; then
     echo "Split file: data/splits/casia_identity_split_v1.json (found)"
 else
     echo "Split file: data/splits/casia_identity_split_v1.json (missing)"
-    echo "Generate it with:"
-    echo "  python -m src.datasets.make_split --data-root data/casia-webface --output data/splits/casia_identity_split_v1.json --version v1 --overwrite"
+    echo "  Generalo con:"
+    echo "    python -m src.datasets.make_split --data-root data/casia-webface --output data/splits/casia_identity_split_v1.json --version v1 --overwrite"
 fi
 
+# -- 5. Riepilogo comandi ------------------------------------------------------
 echo ""
-echo "Training command:"
-echo "  CONFIG=experiments/configs/base.yaml sbatch cluster/train.sh"
+echo "=== Setup completato! ==="
 echo ""
-echo "Evaluation command:"
-echo "  CONFIG=experiments/configs/base.yaml sbatch cluster/eval.sh"
-echo ""
-echo "Combined pipeline:"
-echo "  bash cluster/run_all.sh"
-
-remote_has_content() {
-    local remote_dir="$1"
-    ssh "$CLUSTER_HOST" "if [ -d '$remote_dir' ] && [ \"\$(find '$remote_dir' -mindepth 1 -print -quit 2>/dev/null)\" ]; then exit 0; else exit 1; fi"
-}
-
-sync_if_needed() {
-    local local_dir="$1"
-    local remote_dir="$2"
-    local label="$3"
-    local force_flag="$4"
-
-    if [ ! -d "$local_dir" ]; then
-        echo "[sync] $label: local directory missing, skip ($local_dir)"
-        return
-    fi
-
-    if [ "$force_flag" -eq 0 ] && remote_has_content "$remote_dir"; then
-        echo "[sync] $label: already present on cluster, skip"
-        echo "       remote: $remote_dir"
-        return
-    fi
-
-    echo "[sync] $label: uploading to cluster..."
-    rsync -az --info=progress2 "$local_dir/" "$CLUSTER_HOST:$remote_dir/"
-    echo "[sync] $label: done"
-}
-
-if [ "$SYNC_TO_CLUSTER" -eq 1 ]; then
-    echo ""
-    echo "=== Optional sync to cluster ==="
-
-    if [ -z "$CLUSTER_HOST" ] || [ -z "$CLUSTER_PROJECT_DIR" ]; then
-        echo "SYNC_TO_CLUSTER=1 requires CLUSTER_HOST and CLUSTER_PROJECT_DIR"
-        echo "Example:"
-        echo "  SYNC_TO_CLUSTER=1 CLUSTER_HOST=user@gcluster.dmi.unict.it CLUSTER_PROJECT_DIR=/home/user/ml-face-recognition bash cluster/setup.sh"
-        exit 1
-    fi
-
-    REMOTE_DATA_DIR="$CLUSTER_PROJECT_DIR/data/casia-webface"
-    REMOTE_WEIGHTS_DIR="$CLUSTER_PROJECT_DIR/experiments/runs"
-
-    ssh "$CLUSTER_HOST" "mkdir -p '$REMOTE_DATA_DIR' '$REMOTE_WEIGHTS_DIR'"
-
-    sync_if_needed "$LOCAL_DATA_DIR" "$REMOTE_DATA_DIR" "dataset" "$FORCE_SYNC_DATASET"
-    sync_if_needed "$LOCAL_WEIGHTS_DIR" "$REMOTE_WEIGHTS_DIR" "model weights" "$FORCE_SYNC_WEIGHTS"
-fi
+echo "Prossimi passi:"
+echo "  1. CONFIG=experiments/configs/base.yaml sbatch cluster/train.sh"
+echo "  2. CONFIG=experiments/configs/base.yaml sbatch cluster/eval.sh"
+echo "  3. Oppure pipeline completa: bash cluster/run_all.sh"

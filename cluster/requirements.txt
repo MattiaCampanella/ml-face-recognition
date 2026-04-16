@@ -1,0 +1,12 @@
+--extra-index-url https://download.pytorch.org/whl/cu118
+numpy==1.23.5
+torch
+torchvision
+torchaudio
+pandas
+pillow
+matplotlib
+scikit-learn
+pyyaml
+tensorboard
+tqdm
