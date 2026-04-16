@@ -149,7 +149,10 @@ function Upload {
 
 function Download-RemoteDir($remoteSubpath, $localDest) {
     New-Item -ItemType Directory -Force -Path $localDest | Out-Null
-    Invoke-SshCommand "cd $REMOTE_PROJECT_DIR && tar cf - $remoteSubpath" | tar xvf - -C "$LOCAL"
+    $sshCmd = "ssh -i `"$SSH_KEY`" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o PasswordAuthentication=no $SSH_TARGET"
+    $tarCmd = "cd $REMOTE_PROJECT_DIR && tar cf - $remoteSubpath"
+    $fullCmd = "$sshCmd `"$tarCmd`" | tar xvf - -C `"$LOCAL`""
+    & cmd.exe /c $fullCmd
 }
 
 function Download {
