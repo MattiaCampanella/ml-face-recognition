@@ -61,7 +61,7 @@ def extract_embeddings(
             labels = labels.to(device, non_blocking=True)
 
             # Forward pass with AMP if enabled
-            with torch.cuda.amp.autocast(enabled=amp_enabled and device.type == "cuda"):
+            with torch.amp.autocast("cuda", enabled=amp_enabled and device.type == "cuda"):
                 outputs = model(images)
 
             # Extract embeddings (last layer before classifier)

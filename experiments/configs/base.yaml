@@ -24,9 +24,9 @@ system:
   deterministic: true
   benchmark: false
   device: auto
-  num_workers: 4
+  num_workers: 8
   pin_memory: true
-  amp: false
+  amp: true
 
 data:
   dataset_name: casia-webface
@@ -56,10 +56,10 @@ loss:
   params: {}
 
 train:
-  epochs: 30
-  batch_size: 64
+  epochs: 100
+  batch_size: 512
   eval_every: 1
-  log_every_steps: 50
+  log_every_steps: 100
   optimizer:
     name: adamw
     lr: 0.0003
@@ -67,7 +67,7 @@ train:
   scheduler:
     name: cosine
     params:
-      t_max: 30
+      t_max: 100
       min_lr: 0.000001
   grad_clip:
     enabled: false
@@ -91,6 +91,6 @@ checkpoint:
   resume_from: null
   save_last: true
   save_best: true
-  save_every_n_epochs: 5
+  save_every_n_epochs: 10
   monitor: train_loss
   mode: min

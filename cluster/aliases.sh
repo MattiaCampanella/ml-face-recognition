@@ -177,6 +177,28 @@ _monitor_snapshot() {
 		step_valid=$(echo "$last_step_line" | grep -oP 'valid_anchors=\K[0-9/]+')
 	fi
 
+	# ── estimate total steps per epoch ─────────────────────────────────
+	local ep_total_steps="?"
+	local has_completed_epoch
+	has_completed_epoch=$(grep -cE '^\[(triplet )?epoch [0-9]+\]' "$logfile")
+
+	if [ "$has_completed_epoch" -gt 0 ] 2>/dev/null; then
+		local max_step_logged
+		max_step_logged=$(grep -E '^\[(train|triplet)\] step=' "$logfile" | grep -oP 'step=\K[0-9]+' | sort -nr | head -1)
+		if [ -n "$max_step_logged" ] && [ "$max_step_logged" -gt 0 ] 2>/dev/null; then
+			ep_total_steps="$max_step_logged"
+		fi
+	else
+		local dataset_name="" config_batch_size=""
+		if [ -n "$config_path" ] && [ -f "$PROJ_DIR/$config_path" ]; then
+			dataset_name=$(grep -E '^[[:space:]]*dataset_name:' "$PROJ_DIR/$config_path" | head -1 | sed 's/.*dataset_name:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
+			config_batch_size=$(grep -E '^[[:space:]]*batch_size:' "$PROJ_DIR/$config_path" | head -1 | sed 's/.*batch_size:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
+		fi
+		if [ "$dataset_name" = "casia-webface" ] && [ -n "$config_batch_size" ] && [ "$config_batch_size" -gt 0 ] 2>/dev/null; then
+			ep_total_steps=$(( 494414 / config_batch_size ))
+		fi
+	fi
+
 	# ── colors ─────────────────────────────────────────────────────────
 	local RST='\033[0m'
 	local BOLD='\033[1m'
@@ -212,6 +234,31 @@ _monitor_snapshot() {
 		FAILED|CANCELLED*) state_color='\033[31m' ;;
 	esac
 
+	# ── current epoch progress bar ────────────────────────────────────
+	local ep_bar_width=40
+	local ep_bar="" ep_pct_text="" ep_filled=0
+
+	if [ -n "$step_num" ]; then
+		if [ "$ep_total_steps" != "?" ] && [ "$ep_total_steps" -gt 0 ] 2>/dev/null; then
+			ep_filled=$(( step_num * ep_bar_width / ep_total_steps ))
+			if [ "$ep_filled" -gt "$ep_bar_width" ]; then ep_filled=$ep_bar_width; fi
+			local ep_remaining=$(( ep_bar_width - ep_filled ))
+			local ep_pct=$(( step_num * 100 / ep_total_steps ))
+			if [ "$ep_pct" -gt 100 ]; then ep_pct=100; fi
+			
+			ep_bar=$(printf '█%.0s' $(seq 1 $ep_filled 2>/dev/null))
+			ep_bar="${ep_bar}$(printf '░%.0s' $(seq 1 $ep_remaining 2>/dev/null))"
+			ep_pct_text="Step ${step_num}/${ep_total_steps} (${ep_pct}%)"
+		else
+			ep_bar=$(printf '█%.0s' $(seq 1 10 2>/dev/null))
+			ep_bar="${ep_bar}$(printf '░%.0s' $(seq 1 30 2>/dev/null))"
+			ep_pct_text="Step ${step_num}/?"
+		fi
+	else
+		ep_bar=$(printf '░%.0s' $(seq 1 $ep_bar_width))
+		ep_pct_text="Step ?/?"
+	fi
+
 	# ── render ─────────────────────────────────────────────────────────
 	echo ""
 	echo -e "  ${BOLD}${CYAN}TRAINING MONITOR${RST}"
@@ -221,17 +268,29 @@ _monitor_snapshot() {
 	[ -n "$date_str" ]    && printf "  ${DIM}Started${RST} %s\n" "$date_str"
 	echo ""
 
-	# epoch progress
-	echo -e "  ${BOLD}${WHITE}Epoch Progress${RST}"
+	# global progress
+	echo -e "  ${BOLD}${WHITE}Global Progress${RST}"
 	echo -e "  ${GREEN}${bar}${RST}  ${BOLD}${pct_text}${RST}"
 	echo ""
 
-	# current step metrics (if training in progress within an epoch)
+	# current epoch progress & step metrics
+	local target_epoch=$(( current_epoch + 1 ))
+	echo -e "  ${BOLD}${WHITE}Current Epoch Progress${RST} ${DIM}(Epoch ${target_epoch})${RST}"
+	echo -e "  ${CYAN}${ep_bar}${RST}  ${BOLD}${ep_pct_text}${RST}"
+	
 	if [ -n "$step_num" ]; then
-		echo -e "  ${BOLD}${WHITE}Current Step${RST} ${DIM}(within next epoch)${RST}"
-		printf "  ${DIM}Step${RST} %-6s  ${DIM}Samples${RST} %-8s  ${DIM}Loss${RST} ${YELLOW}%s${RST}\n" "$step_num" "$step_samples" "$step_loss"
-		[ -n "$step_acc" ]   && printf "  ${DIM}Accuracy${RST}      ${MAGENTA}%s${RST}\n" "$step_acc"
-		[ -n "$step_valid" ] && printf "  ${DIM}Valid Anchors${RST} ${MAGENTA}%s${RST}\n" "$step_valid"
+		printf "  ${DIM}Samples${RST} %-8s  ${DIM}Loss${RST} ${YELLOW}%-8s${RST}" "$step_samples" "${step_loss:-?}"
+		[ -n "$step_acc" ]   && printf "  ${DIM}Accuracy${RST} ${MAGENTA}%-8s${RST}" "$step_acc"
+		[ -n "$step_valid" ] && printf "  ${DIM}Valid Anchors${RST} ${MAGENTA}%-8s${RST}" "$step_valid"
+		echo -e "\n"
+		
+		# last 2 log lines of the current epoch
+		echo -e "  ${DIM}Recent Log Lines:${RST}"
+		grep -E '^\[(train|triplet)\] step=' "$logfile" | tail -2 | while read -r log_line; do
+			echo -e "    ${DIM}${log_line}${RST}"
+		done
+		echo ""
+	else
 		echo ""
 	fi
 
