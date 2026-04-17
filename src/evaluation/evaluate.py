@@ -21,7 +21,7 @@ def _parse_args() -> argparse.Namespace:
 	)
 	parser.add_argument("--config", type=str, default="experiments/configs/base.yaml")
 	parser.add_argument("--checkpoint", type=str, default=None)
-	parser.add_argument("--split", type=str, default="test")
+	parser.add_argument("--split", type=str, default="val")
 	parser.add_argument("--output-dir", type=str, default=None)
 	parser.add_argument("--device", type=str, default="auto")
 	parser.add_argument("--batch-size", type=int, default=64)
