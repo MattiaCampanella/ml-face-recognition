@@ -102,7 +102,5 @@ def evaluate_retrieval(
 
 	prepared = _normalize_embeddings(embeddings.detach(), l2_normalize=l2_normalize)
 	similarity = pairwise_similarity(prepared, metric=metric, l2_normalize=False)
-	similarity_np = similarity.cpu().numpy()
-	targets_np = targets.detach().cpu().numpy()
-	metrics = retrieval_map_at_k(similarity_np, targets_np, topk=topk)
+	metrics = retrieval_map_at_k(similarity, targets, topk=topk)
 	return metrics, similarity
