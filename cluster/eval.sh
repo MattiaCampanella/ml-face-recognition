@@ -27,10 +27,6 @@ OUTPUT_DIR="${OUTPUT_DIR:-}"
 DEVICE="${DEVICE:-auto}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
-PCA_COMPONENTS="${PCA_COMPONENTS:-2}"
-TSNE_PERPLEXITY="${TSNE_PERPLEXITY:-30.0}"
-TSNE_ITER="${TSNE_ITER:-1000}"
-SEED="${SEED:-42}"
 
 if [ ! -f "$CONFIG" ]; then
 	echo "Config not found: $CONFIG"
@@ -53,10 +49,6 @@ ARGS=(
 	--device "$DEVICE"
 	--batch-size "$BATCH_SIZE"
 	--num-workers "$NUM_WORKERS"
-	--pca-components "$PCA_COMPONENTS"
-	--tsne-perplexity "$TSNE_PERPLEXITY"
-	--tsne-iter "$TSNE_ITER"
-	--seed "$SEED"
 )
 
 if [ -n "$CHECKPOINT" ]; then
