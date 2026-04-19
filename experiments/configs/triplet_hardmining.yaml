@@ -24,9 +24,9 @@ system:
   deterministic: true
   benchmark: false
   device: auto
-  num_workers: 4
+  num_workers: 8
   pin_memory: true
-  amp: false
+  amp: true
 
 data:
   dataset_name: casia-webface
@@ -54,17 +54,26 @@ model:
 loss:
   name: triplet
   params:
-    margin: 0.2
+    margin: 0.1
     normalize_embeddings: false
+    margin_curriculum:
+      schedule: linear #constant, step, linear
+      start: 0.05
+      end: 0.2
+      warmup_epochs: 20
+    mining_curriculum: # easy_semi_hard, semi_hard, hard
+      phase1: semi_hard
+      phase2: hard
+      warmup_epochs: 20
 
 train:
-  epochs: 30
-  batch_size: 64
+  epochs: 100
+  batch_size: 512
   eval_every: 1
-  log_every_steps: 50
+  log_every_steps: 100
   sampler:
-    p: 16
-    k: 4
+    p: 24
+    k: 3
     shuffle: true
     drop_last: true
   optimizer:
@@ -74,7 +83,7 @@ train:
   scheduler:
     name: cosine
     params:
-      t_max: 30
+      t_max: 120
       min_lr: 0.000001
   grad_clip:
     enabled: false
