@@ -117,6 +117,18 @@ def main() -> None:
 	)
 
 	model_cfg = config["model"]
+	triplet_cfg = loss_cfg.setdefault("params", {}) if loss_name == "triplet" else {}
+	if loss_name == "triplet":
+		# Keep a single normalization stage for triplet training.
+		model_normalize_default = bool(model_cfg.get("normalize_embeddings", True))
+		original_model_normalize = model_normalize_default
+		triplet_normalize = bool(triplet_cfg.get("normalize_embeddings", model_normalize_default))
+		model_cfg["normalize_embeddings"] = triplet_normalize
+		triplet_cfg["normalize_embeddings"] = False
+		if original_model_normalize != triplet_normalize:
+			print(
+				"[train] Overriding model.normalize_embeddings to match triplet normalization setting."
+			)
 	classifier_cfg = model_cfg.get("classifier_head", {})
 	num_classes = int(classifier_cfg.get("num_classes") or len(train_label_mapping))
 	classifier_enabled = bool(classifier_cfg.get("enabled", True))
@@ -163,6 +175,15 @@ def main() -> None:
 		sampler_cfg = config["train"].get("sampler", {})
 		p = int(sampler_cfg.get("p", 16))
 		k = int(sampler_cfg.get("k", 4))
+		margin_curriculum_cfg = triplet_cfg.get("margin_curriculum", {})
+		margin_schedule = str(margin_curriculum_cfg.get("schedule", "constant"))
+		margin_start = float(margin_curriculum_cfg.get("start", triplet_cfg.get("margin", 0.2)))
+		margin_end = float(margin_curriculum_cfg.get("end", triplet_cfg.get("margin", 0.2)))
+		margin_warmup_epochs = int(margin_curriculum_cfg.get("warmup_epochs", 0))
+		mining_curriculum_cfg = triplet_cfg.get("mining_curriculum", {})
+		mining_phase1 = str(mining_curriculum_cfg.get("phase1", "easy_semi_hard"))
+		mining_phase2 = str(mining_curriculum_cfg.get("phase2", "hard"))
+		mining_warmup_epochs = int(mining_curriculum_cfg.get("warmup_epochs", 0))
 		batch_sampler = PKBatchSampler(
 			labels=[sample.label for sample in train_dataset.samples],
 			p=p,
@@ -176,7 +197,6 @@ def main() -> None:
 			num_workers=int(seed_cfg.get("num_workers", 4)),
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
 		)
-		triplet_cfg = loss_cfg.get("params", {})
 		history = train_triplet_learning(
 			model=model,
 			train_loader=train_loader,
@@ -186,7 +206,14 @@ def main() -> None:
 			scheduler=scheduler,
 			device=device,
 			margin=float(triplet_cfg.get("margin", 0.2)),
+			margin_start=margin_start,
+			margin_end=margin_end,
+			margin_schedule=margin_schedule,
+			margin_warmup_epochs=margin_warmup_epochs,
 			normalize_embeddings=bool(triplet_cfg.get("normalize_embeddings", False)),
+			mining_phase1_strategy=mining_phase1,
+			mining_phase2_strategy=mining_phase2,
+			mining_warmup_epochs=mining_warmup_epochs,
 			amp_enabled=amp_enabled,
 			grad_clip_max_norm=grad_clip_max_norm,
 			log_every_steps=log_every_steps,

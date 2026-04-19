@@ -541,6 +541,7 @@ def run_triplet_epoch(
     *,
     margin: float = 0.2,
     normalize_embeddings: bool = False,
+    mining_strategy: str = "hard",
     amp_enabled: bool = False,
     grad_clip_max_norm: Optional[float] = None,
     log_every_steps: int = 50,
@@ -569,6 +570,7 @@ def run_triplet_epoch(
                 labels,
                 margin=margin,
                 normalize_embeddings=normalize_embeddings,
+                mining_strategy=mining_strategy,
             )
 
         scaler.scale(loss).backward()
@@ -618,7 +620,14 @@ def train_triplet_learning(
     scheduler: Optional[Any] = None,
     device: str | torch.device = "auto",
     margin: float = 0.2,
+    margin_start: Optional[float] = None,
+    margin_end: Optional[float] = None,
+    margin_schedule: str = "constant",
+    margin_warmup_epochs: int = 0,
     normalize_embeddings: bool = False,
+    mining_phase1_strategy: str = "easy_semi_hard",
+    mining_phase2_strategy: str = "hard",
+    mining_warmup_epochs: int = 0,
     amp_enabled: bool = False,
     grad_clip_max_norm: Optional[float] = None,
     log_every_steps: int = 50,
@@ -632,6 +641,19 @@ def train_triplet_learning(
 ) -> list[dict[str, Any]]:
     if epochs <= 0:
         raise ValueError(f"epochs must be > 0, got {epochs}.")
+    if margin_warmup_epochs < 0:
+        raise ValueError(f"margin_warmup_epochs must be >= 0, got {margin_warmup_epochs}.")
+    if mining_warmup_epochs < 0:
+        raise ValueError(f"mining_warmup_epochs must be >= 0, got {mining_warmup_epochs}.")
+
+    resolved_margin_start = float(margin if margin_start is None else margin_start)
+    resolved_margin_end = float(margin if margin_end is None else margin_end)
+    resolved_margin_schedule = margin_schedule.lower()
+    if resolved_margin_schedule not in {"constant", "step", "linear"}:
+        raise ValueError(
+            "margin_schedule must be one of {'constant', 'step', 'linear'}, "
+            f"got {margin_schedule}."
+        )
 
     resolved_device = _resolve_device(device)
     model = model.to(resolved_device)
@@ -669,14 +691,33 @@ def train_triplet_learning(
             f"Monitor '{monitor}' is incompatible with triplet validation mode."
         )
 
+    def resolve_margin(epoch: int) -> float:
+        if resolved_margin_schedule == "constant" or margin_warmup_epochs <= 0:
+            return resolved_margin_end
+        if resolved_margin_schedule == "step":
+            return resolved_margin_start if epoch <= margin_warmup_epochs else resolved_margin_end
+
+        # linear schedule
+        if epoch > margin_warmup_epochs:
+            return resolved_margin_end
+        if margin_warmup_epochs == 1:
+            return resolved_margin_end
+        alpha = float(epoch - 1) / float(margin_warmup_epochs - 1)
+        return resolved_margin_start + alpha * (resolved_margin_end - resolved_margin_start)
+
     for epoch in range(1, epochs + 1):
+        mining_strategy = (
+            mining_phase1_strategy if epoch <= mining_warmup_epochs else mining_phase2_strategy
+        )
+        epoch_margin = resolve_margin(epoch)
         metrics = run_triplet_epoch(
             model=model,
             dataloader=train_loader,
             optimizer=optimizer,
             device=resolved_device,
-            margin=margin,
+            margin=epoch_margin,
             normalize_embeddings=normalize_embeddings,
+            mining_strategy=mining_strategy,
             amp_enabled=amp_enabled,
             grad_clip_max_norm=grad_clip_max_norm,
             log_every_steps=log_every_steps,
@@ -725,6 +766,8 @@ def train_triplet_learning(
 
         epoch_payload["monitor_value"] = float(monitor_value)
         epoch_payload["is_best"] = is_best
+        epoch_payload["mining_strategy"] = mining_strategy
+        epoch_payload["margin"] = float(epoch_margin)
         history.append(epoch_payload)
 
         if checkpoint_path is not None:
@@ -739,15 +782,17 @@ def train_triplet_learning(
             )
             print(
                 f"[triplet epoch {epoch:03d}] loss={metrics.loss:.4f} "
+                f"margin={epoch_margin:.4f} "
                 f"hard_pos={metrics.hard_positive_distance:.4f} hard_neg={metrics.hard_negative_distance:.4f} "
-                f"valid_anchors={metrics.valid_anchors}/{metrics.total_anchors} {val_summary} "
+                f"valid_anchors={metrics.valid_anchors}/{metrics.total_anchors} mining={mining_strategy} {val_summary} "
                 f"best={best_value:.4f}"
             )
         else:
             print(
                 f"[triplet epoch {epoch:03d}] loss={metrics.loss:.4f} "
+                f"margin={epoch_margin:.4f} "
                 f"hard_pos={metrics.hard_positive_distance:.4f} hard_neg={metrics.hard_negative_distance:.4f} "
-                f"valid_anchors={metrics.valid_anchors}/{metrics.total_anchors} best={best_value:.4f}"
+                f"valid_anchors={metrics.valid_anchors}/{metrics.total_anchors} mining={mining_strategy} best={best_value:.4f}"
             )
 
     return history
