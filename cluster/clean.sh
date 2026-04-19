@@ -24,9 +24,9 @@ if [ -d "experiments/runs" ]; then
 	$RM experiments/runs/* 2>/dev/null || true
 fi
 
-echo "[2] logs/*.log"
-if [ -d "logs" ]; then
-	$RM logs/*.log 2>/dev/null || true
+echo "[2] experiments/logs/*.log"
+if [ -d "experiments/logs" ]; then
+	$RM experiments/logs/*.log 2>/dev/null || true
 fi
 
 echo "[3] cluster state files"
