@@ -149,10 +149,15 @@ function Upload {
 
 function Download-RemoteDir($remoteSubpath, $localDest) {
     New-Item -ItemType Directory -Force -Path $localDest | Out-Null
-    $sshCmd = "ssh -i `"$SSH_KEY`" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o PasswordAuthentication=no $SSH_TARGET"
-    $tarCmd = "cd $REMOTE_PROJECT_DIR && tar cf - $remoteSubpath"
-    $fullCmd = "$sshCmd `"$tarCmd`" | tar xvf - -C `"$LOCAL`""
-    & cmd.exe /c $fullCmd
+
+    $remoteListCmd = "cd $REMOTE_PROJECT_DIR && find `"$remoteSubpath`" -mindepth 1 -maxdepth 1 -print"
+    $remoteEntries = @(Invoke-SshCommand $remoteListCmd | Where-Object { $_ -and $_.Trim() })
+
+    foreach ($remoteEntry in $remoteEntries) {
+        $remoteEntry = $remoteEntry.Trim()
+        Write-Host "x $remoteEntry" -ForegroundColor Gray
+        Invoke-ScpCommand @('-rq', "${SSH_TARGET}:${REMOTE_PROJECT_DIR}/$remoteEntry", $localDest)
+    }
 }
 
 function Download {
