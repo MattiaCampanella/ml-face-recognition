@@ -4,7 +4,10 @@ param(
     [string]$Action,
 
     [Parameter(Mandatory = $false)]
-    [string]$Path
+    [string]$Path,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeArtifacts
 )
 
 $CLUSTER_USER = "cmpmtt02p16h163d"
@@ -28,7 +31,9 @@ function Get-SshArgs {
         '-i', $SSH_KEY,
         '-o', 'IdentitiesOnly=yes',
         '-o', 'PreferredAuthentications=publickey',
-        '-o', 'PasswordAuthentication=no'
+        '-o', 'PasswordAuthentication=no',
+        '-o', 'BatchMode=yes',
+        '-o', 'ConnectTimeout=15'
     )
 }
 
@@ -37,7 +42,9 @@ function Get-ScpArgs {
         '-i', $SSH_KEY,
         '-o', 'IdentitiesOnly=yes',
         '-o', 'PreferredAuthentications=publickey',
-        '-o', 'PasswordAuthentication=no'
+        '-o', 'PasswordAuthentication=no',
+        '-o', 'BatchMode=yes',
+        '-o', 'ConnectTimeout=15'
     )
 }
 
@@ -81,7 +88,7 @@ mkdir -p ~/.ssh; umask 077; touch ~/.ssh/authorized_keys; key=$(printf '%s' '__K
 }
 
 function Upload {
-    Write-Host "Uploading project to cluster: ${REMOTE_PROJECT_DIR}" -ForegroundColor Cyan
+    Write-Host "Uploading project code to cluster: ${REMOTE_PROJECT_DIR}" -ForegroundColor Cyan
 
     Get-ChildItem -Path $LOCAL -Directory -Recurse -Filter "__pycache__" |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -96,8 +103,7 @@ function Upload {
         "INSTRUCTIONS.md",
         "LICENSE",
         "experiments/configs",
-        "data/splits",
-        "pretrained_weights"
+        "data/splits"
     )
 
     foreach ($item in $codeItems) {
@@ -109,39 +115,31 @@ function Upload {
 
         if (Test-Path $localPath -PathType Container) {
             Write-Host "Copying folder: $item" -ForegroundColor Cyan
-            Invoke-ScpCommand @('-rq', "$localPath/.", "${REMOTE}/$item/")
+            Invoke-ScpCommand @('-r', "$localPath/.", "${REMOTE}/$item/")
         } else {
             Write-Host "Copying file: $item" -ForegroundColor Cyan
-            Invoke-ScpCommand @('-q', $localPath, "${REMOTE}/")
+            Invoke-ScpCommand @($localPath, "${REMOTE}/")
         }
     }
-    
-    # $localDatasetDir = Join-Path $LOCAL "data\casia-webface"
-    # $remoteDatasetDir = "$REMOTE_PROJECT_DIR/data/casia-webface"
-    # if (Test-Path $localDatasetDir -PathType Container) {
-    #     if (Test-RemoteHasContent $remoteDatasetDir) {
-    #         Write-Host "[SKIP] Dataset already present on cluster: data/casia-webface" -ForegroundColor Yellow
-    #     } else {
-    #         Write-Host "Uploading dataset to cluster (first-time only)..." -ForegroundColor Cyan
-    #         Invoke-ScpCommand @('-rq', $localDatasetDir, "${REMOTE}/data/")
-    #         Write-Host "Dataset upload complete." -ForegroundColor Green
-    #     }
-    # } else {
-    #     Write-Host "[SKIP] Local dataset folder not found: data/casia-webface" -ForegroundColor Yellow
-    # }
-    
-    $localRunsDir = Join-Path $LOCAL "experiments\runs"
-    $remoteRunsDir = "$REMOTE_PROJECT_DIR/experiments/runs"
-    if (Test-Path $localRunsDir -PathType Container) {
-        if (Test-RemoteHasContent $remoteRunsDir) {
-            Write-Host "[SKIP] Model runs/checkpoints already present on cluster: experiments/runs" -ForegroundColor Yellow
+
+    if ($IncludeArtifacts) {
+        $localWeightsDir = Join-Path $LOCAL "pretrained_weights"
+        if (Test-Path $localWeightsDir -PathType Container) {
+            Write-Host "Copying folder: pretrained_weights" -ForegroundColor Cyan
+            Invoke-ScpCommand @('-r', "$localWeightsDir/.", "${REMOTE}/pretrained_weights/")
         } else {
-            Write-Host "Uploading model runs/checkpoints to cluster (first-time only)..." -ForegroundColor Cyan
-            Invoke-ScpCommand @('-rq', $localRunsDir, "${REMOTE}/experiments/")
-            Write-Host "Model runs upload complete." -ForegroundColor Green
+            Write-Host "[SKIP] pretrained_weights (not found)" -ForegroundColor Yellow
+        }
+
+        $localRunsDir = Join-Path $LOCAL "experiments\runs"
+        if (Test-Path $localRunsDir -PathType Container) {
+            Write-Host "Copying folder: experiments/runs" -ForegroundColor Cyan
+            Invoke-ScpCommand @('-r', "$localRunsDir/.", "${REMOTE}/experiments/runs/")
+        } else {
+            Write-Host "[SKIP] experiments/runs (not found)" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "[SKIP] Local runs folder not found: experiments/runs" -ForegroundColor Yellow
+        Write-Host "[SKIP] Large artifacts not uploaded by default. Use -IncludeArtifacts to copy pretrained_weights and experiments/runs." -ForegroundColor Yellow
     }
 
     Write-Host "[OK] Upload completed." -ForegroundColor Green
@@ -240,8 +238,10 @@ function Push {
 
     $remotePath = $Path -replace '\\', '/'
     $remoteDir = Split-Path $remotePath
-    if ($remoteDir) {
-            Invoke-SshCommand "mkdir -p $REMOTE_PROJECT_DIR/$remoteDir" | Out-Null
+    if (Test-Path $localPath -PathType Container) {
+        Invoke-SshCommand "mkdir -p $REMOTE_PROJECT_DIR/$remotePath" | Out-Null
+    } elseif ($remoteDir) {
+        Invoke-SshCommand "mkdir -p $REMOTE_PROJECT_DIR/$remoteDir" | Out-Null
     }
 
     if (Test-Path $localPath -PathType Container) {
