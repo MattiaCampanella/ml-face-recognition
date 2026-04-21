@@ -182,8 +182,14 @@ def main() -> None:
 		margin_warmup_epochs = int(margin_curriculum_cfg.get("warmup_epochs", 0))
 		mining_curriculum_cfg = triplet_cfg.get("mining_curriculum", {})
 		mining_phase1 = str(mining_curriculum_cfg.get("phase1", "easy_semi_hard"))
-		mining_phase2 = str(mining_curriculum_cfg.get("phase2", "hard"))
-		mining_warmup_epochs = int(mining_curriculum_cfg.get("warmup_epochs", 0))
+		mining_phase2 = str(mining_curriculum_cfg.get("phase2", "semi_hard"))
+		mining_phase3 = mining_curriculum_cfg.get("phase3")
+		mining_phase3 = None if mining_phase3 is None else str(mining_phase3)
+		mining_phase1_epochs = int(
+			mining_curriculum_cfg.get("phase1_epochs", mining_curriculum_cfg.get("warmup_epochs", 0))
+		)
+		mining_phase2_epochs = int(mining_curriculum_cfg.get("phase2_epochs", 0))
+		mining_warmup_epochs = mining_phase1_epochs
 		batch_sampler = PKBatchSampler(
 			labels=[sample.label for sample in train_dataset.samples],
 			p=p,
@@ -213,6 +219,9 @@ def main() -> None:
 			normalize_embeddings=bool(triplet_cfg.get("normalize_embeddings", False)),
 			mining_phase1_strategy=mining_phase1,
 			mining_phase2_strategy=mining_phase2,
+			mining_phase3_strategy=mining_phase3,
+			mining_phase1_epochs=mining_phase1_epochs,
+			mining_phase2_epochs=mining_phase2_epochs,
 			mining_warmup_epochs=mining_warmup_epochs,
 			amp_enabled=amp_enabled,
 			grad_clip_max_norm=grad_clip_max_norm,

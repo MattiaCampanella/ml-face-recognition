@@ -627,6 +627,9 @@ def train_triplet_learning(
     normalize_embeddings: bool = False,
     mining_phase1_strategy: str = "easy_semi_hard",
     mining_phase2_strategy: str = "hard",
+    mining_phase3_strategy: Optional[str] = None,
+    mining_phase1_epochs: int = 0,
+    mining_phase2_epochs: int = 0,
     mining_warmup_epochs: int = 0,
     amp_enabled: bool = False,
     grad_clip_max_norm: Optional[float] = None,
@@ -643,6 +646,10 @@ def train_triplet_learning(
         raise ValueError(f"epochs must be > 0, got {epochs}.")
     if margin_warmup_epochs < 0:
         raise ValueError(f"margin_warmup_epochs must be >= 0, got {margin_warmup_epochs}.")
+    if mining_phase1_epochs < 0:
+        raise ValueError(f"mining_phase1_epochs must be >= 0, got {mining_phase1_epochs}.")
+    if mining_phase2_epochs < 0:
+        raise ValueError(f"mining_phase2_epochs must be >= 0, got {mining_phase2_epochs}.")
     if mining_warmup_epochs < 0:
         raise ValueError(f"mining_warmup_epochs must be >= 0, got {mining_warmup_epochs}.")
 
@@ -705,10 +712,20 @@ def train_triplet_learning(
         alpha = float(epoch - 1) / float(margin_warmup_epochs - 1)
         return resolved_margin_start + alpha * (resolved_margin_end - resolved_margin_start)
 
+    def resolve_mining_strategy(epoch: int) -> str:
+        if mining_phase3_strategy is None or mining_phase2_epochs <= 0:
+            return mining_phase1_strategy if epoch <= mining_warmup_epochs else mining_phase2_strategy
+
+        phase1_end = mining_phase1_epochs if mining_phase1_epochs > 0 else mining_warmup_epochs
+        phase2_end = phase1_end + mining_phase2_epochs
+        if epoch <= phase1_end:
+            return mining_phase1_strategy
+        if epoch <= phase2_end:
+            return mining_phase2_strategy
+        return mining_phase3_strategy
+
     for epoch in range(1, epochs + 1):
-        mining_strategy = (
-            mining_phase1_strategy if epoch <= mining_warmup_epochs else mining_phase2_strategy
-        )
+        mining_strategy = resolve_mining_strategy(epoch)
         epoch_margin = resolve_margin(epoch)
         metrics = run_triplet_epoch(
             model=model,
@@ -768,6 +785,8 @@ def train_triplet_learning(
         epoch_payload["is_best"] = is_best
         epoch_payload["mining_strategy"] = mining_strategy
         epoch_payload["margin"] = float(epoch_margin)
+        epoch_payload["mining_phase1_epochs"] = int(mining_phase1_epochs)
+        epoch_payload["mining_phase2_epochs"] = int(mining_phase2_epochs)
         history.append(epoch_payload)
 
         if checkpoint_path is not None:

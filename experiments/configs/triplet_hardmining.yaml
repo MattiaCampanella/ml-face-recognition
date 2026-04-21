@@ -57,14 +57,16 @@ loss:
     margin: 0.1
     normalize_embeddings: false
     margin_curriculum:
-      schedule: linear #constant, step, linear
-      start: 0.05
+      schedule: constant #constant, step, linear
+      start: 0.2
       end: 0.2
-      warmup_epochs: 20
+      warmup_epochs: 0
     mining_curriculum: # easy_semi_hard, semi_hard, hard
-      phase1: semi_hard
-      phase2: hard
-      warmup_epochs: 20
+      phase1: easy_semi_hard
+      phase2: semi_hard
+      phase3: hard
+      phase1_epochs: 20
+      phase2_epochs: 60 # + phase1_epochs
 
 train:
   epochs: 100
