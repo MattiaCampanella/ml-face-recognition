@@ -15,12 +15,23 @@ A brief paragraph (3-4 lines) that visually and concisely describes the project,
 
 > 📖 **Official Report**: For all theoretical details, performance analysis, the architecture used, and group contributions, please refer to our formal paper: **[REPORT.md](docs/REPORT.md)**.
 
+## Project Demo
+A demo webapp showcasing identity grouping on uploaded face crops is available in `demo/app.py`.
+Run it locally with:
+
+```bash
+conda env create -f demo/environment_streamlit.yml
+conda activate streamlit-env
+streamlit run demo/app.py
+```
+
+The first version assumes the uploaded images are already cropped around a single face.
+
 ## 🛠 Technical Reproducibility
 
 ### 1. Data and Environment Setup
 
 **Prerequisites:**
-Explain how the reader can install the environment to run your code.
 
 ```bash
 git clone https://github.com/yourusername/your-repo.git
@@ -31,6 +42,20 @@ conda activate dl-project
 
 **Dataset:**
 Download CASIA-WebFace from [the official repository](http://www.cbsr.ia.ac.cn/english/CASIA-WebFace-Database.html) and place `train.rec`, `train.idx`, and `train.lst` in `data/casia-webface/`.
+
+Or use the provided download script:
+
+```bash
+python src/datasets/download_casia.py
+```
+
+>Note that this script requires a file named `credentials.json` with your kaggle API credentials in the project root:
+```json
+{
+  "username": "your_kaggle_username",
+  "api_key": "your_kaggle_api_key"
+}
+```
 
 The dataset uses MXNet RecordIO format (`.rec`/`.idx` binary files). To extract images to disk, use the dedicated extraction environment (Python 3.7 with legacy mxnet support):
 
