@@ -175,11 +175,7 @@ def main() -> None:
 		sampler_cfg = config["train"].get("sampler", {})
 		p = int(sampler_cfg.get("p", 16))
 		k = int(sampler_cfg.get("k", 4))
-		margin_curriculum_cfg = triplet_cfg.get("margin_curriculum", {})
-		margin_schedule = str(margin_curriculum_cfg.get("schedule", "constant"))
-		margin_start = float(margin_curriculum_cfg.get("start", triplet_cfg.get("margin", 0.2)))
-		margin_end = float(margin_curriculum_cfg.get("end", triplet_cfg.get("margin", 0.2)))
-		margin_warmup_epochs = int(margin_curriculum_cfg.get("warmup_epochs", 0))
+		mining_margin = float(triplet_cfg.get("mining_margin", 0.2))
 		mining_curriculum_cfg = triplet_cfg.get("mining_curriculum", {})
 		mining_phase1 = str(mining_curriculum_cfg.get("phase1", "easy_semi_hard"))
 		mining_phase2 = str(mining_curriculum_cfg.get("phase2", "semi_hard"))
@@ -211,11 +207,7 @@ def main() -> None:
 			optimizer=optimizer,
 			scheduler=scheduler,
 			device=device,
-			margin=float(triplet_cfg.get("margin", 0.2)),
-			margin_start=margin_start,
-			margin_end=margin_end,
-			margin_schedule=margin_schedule,
-			margin_warmup_epochs=margin_warmup_epochs,
+			mining_margin=mining_margin,
 			normalize_embeddings=bool(triplet_cfg.get("normalize_embeddings", False)),
 			mining_phase1_strategy=mining_phase1,
 			mining_phase2_strategy=mining_phase2,

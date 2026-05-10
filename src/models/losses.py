@@ -32,7 +32,7 @@ def batch_hard_triplet_loss(
 	embeddings: Tensor,
 	labels: Tensor,
 	*,
-	margin: float = 0.2,
+	mining_margin: float = 0.2,
 	squared: bool = False,
 	normalize_embeddings: bool = False,
 	mining_strategy: str = "hard",
@@ -41,7 +41,7 @@ def batch_hard_triplet_loss(
 
 	Supported strategies:
 	- "hard": hardest negative in the batch.
-	- "semi_hard": closest negative with d(a,p) < d(a,n) < d(a,p)+margin, hard fallback.
+	- "semi_hard": closest negative with d(a,p) < d(a,n) < d(a,p)+mining_margin, hard fallback.
 	- "easy_semi_hard": closest negative with d(a,n) > d(a,p), hard fallback.
 	"""
 	if embeddings.ndim != 2:
@@ -78,7 +78,7 @@ def batch_hard_triplet_loss(
 			candidate_mask = (
 				negative_mask
 				& (distances > anchor_positive)
-				& (distances < (anchor_positive + margin))
+				& (distances < (anchor_positive + mining_margin))
 			)
 		else:
 			candidate_mask = negative_mask & (distances > anchor_positive)
@@ -88,7 +88,7 @@ def batch_hard_triplet_loss(
 
 	valid_mask = torch.isfinite(hard_positive) & torch.isfinite(negative_choice)
 	if valid_mask.any():
-		loss = F.relu(hard_positive[valid_mask] - negative_choice[valid_mask] + margin).mean()
+		loss = F.softplus(hard_positive[valid_mask] - negative_choice[valid_mask]).mean()
 	else:
 		loss = distances.sum() * 0.0
 
