@@ -142,6 +142,9 @@ def main() -> None:
 		classifier_num_classes=(num_classes if classifier_enabled else None),
 	)
 
+	if hasattr(torch, "compile"):
+		model = torch.compile(model)
+
 	optimizer = _build_optimizer(model, config)
 	scheduler = _build_scheduler(optimizer, config)
 	output_cfg = config.get("output", {})
@@ -163,6 +166,7 @@ def main() -> None:
 	config["checkpoint"]["mode"] = monitor_mode
 	save_json(run_dir / "resolved_config.json", config)
 	epochs = int(config["train"].get("epochs", 30))
+	eval_every = int(config["train"].get("eval_every", 1))
 	log_every_steps = int(config["train"].get("log_every_steps", 50))
 	device = seed_cfg.get("device", "auto")
 	amp_enabled = bool(seed_cfg.get("amp", False))
@@ -224,6 +228,7 @@ def main() -> None:
 			val_retrieval_topk=val_topk,
 			val_retrieval_metric=val_metric,
 			val_retrieval_l2_normalize=val_l2_normalize,
+			eval_every=eval_every,
 		)
 	else:
 		train_loader = DataLoader(
@@ -252,6 +257,7 @@ def main() -> None:
 			val_retrieval_topk=val_topk,
 			val_retrieval_metric=val_metric,
 			val_retrieval_l2_normalize=val_l2_normalize,
+			eval_every=eval_every,
 		)
 
 	save_json(run_dir / "training_history.json", history)

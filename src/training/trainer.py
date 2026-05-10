@@ -279,6 +279,7 @@ class SupervisedTrainer:
         val_retrieval_topk: Iterable[int] = (1, 5, 10),
         val_retrieval_metric: str = "cosine",
         val_retrieval_l2_normalize: bool = True,
+        eval_every: int = 5,
     ) -> None:
         self.device = _resolve_device(device)
         self.model = model.to(self.device)
@@ -301,6 +302,7 @@ class SupervisedTrainer:
         self.val_retrieval_topk = tuple(int(k) for k in val_retrieval_topk)
         self.val_retrieval_metric = val_retrieval_metric
         self.val_retrieval_l2_normalize = val_retrieval_l2_normalize
+        self.eval_every = eval_every
 
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir is not None else None
         if self.checkpoint_dir is not None:
@@ -383,6 +385,8 @@ class SupervisedTrainer:
         if epochs <= 0:
             raise ValueError(f"epochs must be > 0, got {epochs}.")
 
+        last_val_metrics: Optional[EpochMetrics | RetrievalEpochMetrics] = None
+
         for epoch in range(1, epochs + 1):
             train_metrics = run_train_epoch(
                 model=self.model,
@@ -401,7 +405,7 @@ class SupervisedTrainer:
             }
 
             val_metrics: Optional[EpochMetrics | RetrievalEpochMetrics] = None
-            if val_loader is not None:
+            if val_loader is not None and (epoch == 1 or epoch % self.eval_every == 0 or epoch == epochs):
                 if self.val_mode == "retrieval":
                     val_metrics = run_retrieval_eval_epoch(
                         model=self.model,
@@ -424,9 +428,9 @@ class SupervisedTrainer:
 
                 val_metrics.epoch = epoch
                 epoch_payload["val"] = asdict(val_metrics)
-                monitor_value = self._resolve_monitor_value(train_metrics, val_metrics)
-            else:
-                monitor_value = self._resolve_monitor_value(train_metrics, None)
+                last_val_metrics = val_metrics
+                
+            monitor_value = self._resolve_monitor_value(train_metrics, val_metrics or last_val_metrics)
 
             if self.scheduler is not None:
                 # Support both ReduceLROnPlateau and standard schedulers.
@@ -499,6 +503,7 @@ def train_supervised(
     val_retrieval_topk: Iterable[int] = (1, 5, 10),
     val_retrieval_metric: str = "cosine",
     val_retrieval_l2_normalize: bool = True,
+    eval_every: int = 5,
 ) -> list[dict[str, Any]]:
     """Functional wrapper around SupervisedTrainer.fit for easier script integration."""
     trainer = SupervisedTrainer(
@@ -517,6 +522,7 @@ def train_supervised(
         val_retrieval_topk=val_retrieval_topk,
         val_retrieval_metric=val_retrieval_metric,
         val_retrieval_l2_normalize=val_retrieval_l2_normalize,
+        eval_every=eval_every,
     )
     return trainer.fit(train_loader=train_loader, val_loader=val_loader, epochs=epochs)
 
@@ -637,6 +643,7 @@ def train_triplet_learning(
     val_retrieval_topk: Iterable[int] = (1, 5, 10),
     val_retrieval_metric: str = "cosine",
     val_retrieval_l2_normalize: bool = True,
+    eval_every: int = 5,
 ) -> list[dict[str, Any]]:
     if epochs <= 0:
         raise ValueError(f"epochs must be > 0, got {epochs}.")
@@ -656,6 +663,7 @@ def train_triplet_learning(
 
     history: list[dict[str, Any]] = []
     best_value: Optional[float] = None
+    last_val_metrics: Optional[RetrievalEpochMetrics] = None
 
     def is_better(value: float) -> bool:
         nonlocal best_value
@@ -712,7 +720,7 @@ def train_triplet_learning(
         metrics.epoch = epoch
         epoch_payload = {"train": asdict(metrics)}
         val_metrics: Optional[RetrievalEpochMetrics] = None
-        if val_loader is not None:
+        if val_loader is not None and (epoch == 1 or epoch % eval_every == 0 or epoch == epochs):
             val_metrics = run_retrieval_eval_epoch(
                 model=model,
                 dataloader=val_loader,
@@ -725,8 +733,9 @@ def train_triplet_learning(
             )
             val_metrics.epoch = epoch
             epoch_payload["val"] = asdict(val_metrics)
+            last_val_metrics = val_metrics
 
-        monitor_value = resolve_monitor_value(metrics, val_metrics)
+        monitor_value = resolve_monitor_value(metrics, val_metrics or last_val_metrics)
         if scheduler is not None and hasattr(scheduler, "step"):
             try:
                 scheduler.step(monitor_value)
