@@ -48,6 +48,8 @@ def build_image_transforms(image_size: int, train: bool) -> transforms.Compose:
 				transforms.Resize((image_size + 32, image_size + 32)),
 				transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
 				transforms.RandomHorizontalFlip(p=0.5),
+				transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.1),
+				transforms.RandomGrayscale(p=0.05),
 				transforms.ToTensor(),
 				transforms.Normalize(mean=mean, std=std),
 			]
