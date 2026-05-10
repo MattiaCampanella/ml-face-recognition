@@ -369,7 +369,7 @@ class SupervisedTrainer:
         if self.checkpoint_dir is None:
             return
 
-        history_path = self.checkpoint_dir / "history.json"
+        history_path = self.checkpoint_dir.parent / "training_history.json"
         with history_path.open("w", encoding="utf-8") as handle:
             json.dump(self.history, handle, indent=2)
             handle.write("\n")
@@ -759,7 +759,7 @@ def train_triplet_learning(
         history.append(epoch_payload)
 
         if checkpoint_path is not None:
-            history_path = checkpoint_path / "history.json"
+            history_path = checkpoint_path.parent / "training_history.json"
             with history_path.open("w", encoding="utf-8") as handle:
                 json.dump(history, handle, indent=2)
                 handle.write("\n")
