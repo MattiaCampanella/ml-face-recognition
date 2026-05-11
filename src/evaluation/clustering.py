@@ -87,8 +87,11 @@ def extract_embeddings(
                 labels_list.append(labels.cpu())
 
             if return_identity_ids and isinstance(batch, dict) and "identity_id" in batch:
-                identity_ids = batch["identity_id"].to(device)
-                identity_ids_list.append(identity_ids.cpu())
+                ids = batch["identity_id"]
+                if isinstance(ids, torch.Tensor):
+                    identity_ids_list.append(ids.cpu())
+                else:
+                    identity_ids_list.append(torch.tensor(ids))
 
     embeddings = torch.cat(embeddings_list, dim=0)
     labels = torch.cat(labels_list, dim=0) if return_labels else None

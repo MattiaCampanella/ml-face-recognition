@@ -114,6 +114,7 @@ def main() -> None:
 		shuffle=False,
 		num_workers=int(seed_cfg.get("num_workers", 4)),
 		pin_memory=bool(seed_cfg.get("pin_memory", True)),
+		persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 	)
 
 	model_cfg = config["model"]
@@ -202,6 +203,7 @@ def main() -> None:
 			batch_sampler=batch_sampler,
 			num_workers=int(seed_cfg.get("num_workers", 4)),
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
+			persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 		)
 		history = train_triplet_learning(
 			model=model,
@@ -237,6 +239,7 @@ def main() -> None:
 			shuffle=True,
 			num_workers=int(seed_cfg.get("num_workers", 4)),
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
+			persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 		)
 		history = train_supervised(
 			model=model,

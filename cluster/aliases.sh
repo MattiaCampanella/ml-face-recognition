@@ -7,7 +7,7 @@ alias proj='cd "$PROJ_DIR"'
 alias myjobs='squeue --me --format="%.10i %.20j %.8T %.10M %.6D %.20R"'
 alias killjob='scancel'
 alias killalljobs='scancel --me'
-
+alias log='cat $(ls -t "$PROJ_DIR"/experiments/logs/*.log 2>/dev/null | head -1)'
 jobinfo() {
 	if [ -z "${1:-}" ]; then
 		echo "Usage: jobinfo <JOB_ID>"
@@ -124,6 +124,48 @@ _monitor_snapshot() {
 		fi
 	fi
 
+	# ── find run dir from log ("Artifacts saved to <path>") ────────────
+	local run_dir_path=""
+	run_dir_path=$(grep -oP '(?<=Artifacts saved to\s)\S+' "$logfile" 2>/dev/null | tail -1)
+	# fallback: use the latest run dir
+	if [ -z "$run_dir_path" ]; then
+		run_dir_path=$(find "$PROJ_DIR/experiments/runs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -1)
+	fi
+
+	# ── read best model mAP from training_history.json ─────────────────
+	local best_epoch="" best_map1="" best_map5="" best_map10="" best_monitor=""
+	local history_json=""
+	# prefer training_history.json in run dir, fall back to checkpoints/history.json
+	if [ -n "$run_dir_path" ] && [ -f "${run_dir_path}/training_history.json" ]; then
+		history_json="${run_dir_path}/training_history.json"
+	elif [ -n "$run_dir_path" ] && [ -f "${run_dir_path}/checkpoints/history.json" ]; then
+		history_json="${run_dir_path}/checkpoints/history.json"
+	fi
+	if [ -n "$history_json" ] && command -v python3 &>/dev/null; then
+		local best_json
+		best_json=$(python3 - "$history_json" <<'PYEOF'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+    best = max((e for e in data if e.get('is_best')), key=lambda e: e.get('monitor_value', 0), default=None)
+    if best:
+        ep  = best.get('train', {}).get('epoch', best.get('val', {}).get('epoch', '?'))
+        mv  = best.get('monitor_value', '')
+        mk  = best.get('val', {}).get('map_at_k', {})
+        print(f"{ep}|{mv:.6f}|{mk.get('1',''):.6f}|{mk.get('5',''):.6f}|{mk.get('10',''):.6f}")
+except Exception:
+    pass
+PYEOF
+		)
+		if [ -n "$best_json" ]; then
+			best_epoch=$(echo "$best_json" | cut -d'|' -f1)
+			best_monitor=$(echo "$best_json" | cut -d'|' -f2)
+			best_map1=$(echo "$best_json" | cut -d'|' -f3)
+			best_map5=$(echo "$best_json" | cut -d'|' -f4)
+			best_map10=$(echo "$best_json" | cut -d'|' -f5)
+		fi
+	fi
+
 	# ── parse latest epoch summary line ────────────────────────────────
 	local last_epoch_line current_epoch
 	# handle both "[epoch 001]" and "[triplet epoch 001]" formats
@@ -164,11 +206,20 @@ _monitor_snapshot() {
 		fi
 	fi
 
-	# ── parse latest step-level line ───────────────────────────────────
+	# ── parse latest step-level line (from the CURRENT in-progress epoch) ──
+	# Steps reset each epoch, so we need the last step line AFTER the last
+	# epoch summary to get the current epoch's progress.
 	local last_step_line step_num step_samples step_loss step_acc step_valid
-	# handle [train] and [triplet] step log lines
-	last_step_line=$(grep -E '^\[(train|triplet)\] step=' "$logfile" | tail -1)
 	step_num="" step_samples="" step_loss="" step_acc="" step_valid=""
+
+	# Use awk to find the last step line after the last epoch marker.
+	# If no epoch markers exist yet, it returns the last step line overall.
+	last_step_line=$(awk '
+		/^\[(triplet )?epoch [0-9]+\]/ { last_step = "" }
+		/^\[(train|triplet)\] step=/   { last_step = $0 }
+		END { if (last_step != "") print last_step }
+	' "$logfile")
+
 	if [ -n "$last_step_line" ]; then
 		step_num=$(echo "$last_step_line" | grep -oP 'step=\K[0-9]+')
 		step_samples=$(echo "$last_step_line" | grep -oP 'samples=\K[0-9]+')
@@ -177,25 +228,30 @@ _monitor_snapshot() {
 		step_valid=$(echo "$last_step_line" | grep -oP 'valid_anchors=\K[0-9/]+')
 	fi
 
-	# ── estimate total steps per epoch ─────────────────────────────────
-	local ep_total_steps="?"
+	# ── estimate steps per epoch (steps RESET each epoch) ─────────────
+	# Use the last step number logged before the first epoch summary,
+	# which tells us exactly how many steps make up one full epoch.
+	local steps_per_epoch="?"
 	local has_completed_epoch
 	has_completed_epoch=$(grep -cE '^\[(triplet )?epoch [0-9]+\]' "$logfile")
 
 	if [ "$has_completed_epoch" -gt 0 ] 2>/dev/null; then
-		local max_step_logged
-		max_step_logged=$(grep -E '^\[(train|triplet)\] step=' "$logfile" | grep -oP 'step=\K[0-9]+' | sort -nr | head -1)
-		if [ -n "$max_step_logged" ] && [ "$max_step_logged" -gt 0 ] 2>/dev/null; then
-			ep_total_steps="$max_step_logged"
+		local spe
+		spe=$(awk '/^\[(triplet )?epoch [0-9]+\]/{exit}
+		           /^\[(train|triplet)\] step=/{match($0,/step=([0-9]+)/,a); last=a[1]}
+		           END{if(last>0) print last}' "$logfile")
+		if [ -n "$spe" ] && [ "$spe" -gt 0 ] 2>/dev/null; then
+			steps_per_epoch="$spe"
 		fi
 	else
+		# no completed epoch yet – estimate from config
 		local dataset_name="" config_batch_size=""
 		if [ -n "$config_path" ] && [ -f "$PROJ_DIR/$config_path" ]; then
 			dataset_name=$(grep -E '^[[:space:]]*dataset_name:' "$PROJ_DIR/$config_path" | head -1 | sed 's/.*dataset_name:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
 			config_batch_size=$(grep -E '^[[:space:]]*batch_size:' "$PROJ_DIR/$config_path" | head -1 | sed 's/.*batch_size:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
 		fi
 		if [ "$dataset_name" = "casia-webface" ] && [ -n "$config_batch_size" ] && [ "$config_batch_size" -gt 0 ] 2>/dev/null; then
-			ep_total_steps=$(( 494414 / config_batch_size ))
+			steps_per_epoch=$(( 494414 / config_batch_size ))
 		fi
 	fi
 
@@ -235,20 +291,21 @@ _monitor_snapshot() {
 	esac
 
 	# ── current epoch progress bar ────────────────────────────────────
+	# step_num is already within the current epoch (resets each epoch)
 	local ep_bar_width=40
 	local ep_bar="" ep_pct_text="" ep_filled=0
 
 	if [ -n "$step_num" ]; then
-		if [ "$ep_total_steps" != "?" ] && [ "$ep_total_steps" -gt 0 ] 2>/dev/null; then
-			ep_filled=$(( step_num * ep_bar_width / ep_total_steps ))
+		if [ "$steps_per_epoch" != "?" ] && [ "$steps_per_epoch" -gt 0 ] 2>/dev/null; then
+			ep_filled=$(( step_num * ep_bar_width / steps_per_epoch ))
 			if [ "$ep_filled" -gt "$ep_bar_width" ]; then ep_filled=$ep_bar_width; fi
 			local ep_remaining=$(( ep_bar_width - ep_filled ))
-			local ep_pct=$(( step_num * 100 / ep_total_steps ))
+			local ep_pct=$(( step_num * 100 / steps_per_epoch ))
 			if [ "$ep_pct" -gt 100 ]; then ep_pct=100; fi
-			
+
 			ep_bar=$(printf '█%.0s' $(seq 1 $ep_filled 2>/dev/null))
 			ep_bar="${ep_bar}$(printf '░%.0s' $(seq 1 $ep_remaining 2>/dev/null))"
-			ep_pct_text="Step ${step_num}/${ep_total_steps} (${ep_pct}%)"
+			ep_pct_text="Step ${step_num}/${steps_per_epoch} (${ep_pct}%)"
 		else
 			ep_bar=$(printf '█%.0s' $(seq 1 10 2>/dev/null))
 			ep_bar="${ep_bar}$(printf '░%.0s' $(seq 1 30 2>/dev/null))"
@@ -284,9 +341,9 @@ _monitor_snapshot() {
 		[ -n "$step_valid" ] && printf "  ${DIM}Valid Anchors${RST} ${MAGENTA}%-8s${RST}" "$step_valid"
 		echo -e "\n"
 		
-		# last 2 log lines of the current epoch
+		# last 3 log lines (unconditional)
 		echo -e "  ${DIM}Recent Log Lines:${RST}"
-		grep -E '^\[(train|triplet)\] step=' "$logfile" | tail -2 | while read -r log_line; do
+		tail -3 "$logfile" | while read -r log_line; do
 			echo -e "    ${DIM}${log_line}${RST}"
 		done
 		echo ""
@@ -316,6 +373,17 @@ _monitor_snapshot() {
 		echo -e "  ${DIM}No completed epochs yet.${RST}"
 	fi
 
+	# ── best model (all-time) from training_history.json ───────────────
+	if [ -n "$best_epoch" ]; then
+		echo ""
+		echo -e "  ${BOLD}${WHITE}Best Model  ${DIM}(epoch ${best_epoch})${RST}"
+		echo -e "  ${DIM}----------------------------------------------${RST}"
+		[ -n "$best_map1" ]   && printf "  ${DIM}MAP@1${RST}               ${BOLD}${GREEN}%s${RST}\n" "$best_map1"
+		[ -n "$best_map5" ]   && printf "  ${DIM}MAP@5${RST}               ${BOLD}${GREEN}%s${RST}\n" "$best_map5"
+		[ -n "$best_map10" ]  && printf "  ${DIM}MAP@10${RST}              ${BOLD}${GREEN}%s${RST}\n" "$best_map10"
+		[ -n "$best_monitor" ] && printf "  ${DIM}Monitor value${RST}       ${BOLD}${CYAN}%s${RST}\n" "$best_monitor"
+	fi
+
 	echo -e "  ${DIM}----------------------------------------------${RST}"
 	local now
 	now=$(date '+%H:%M:%S')
@@ -324,7 +392,7 @@ _monitor_snapshot() {
 }
 
 monitor() {
-	local interval="${1:-5}"
+	local interval="${1:-60}"
 	trap 'printf "\n"; return 0' INT
 	while true; do
 		clear
