@@ -21,8 +21,8 @@ output:
 
 system:
   seed: 42
-  deterministic: true
-  benchmark: false
+  deterministic: false
+  benchmark: true
   device: auto
   num_workers: 8
   pin_memory: true
@@ -45,7 +45,7 @@ data:
 model:
   backbone: resnet18
   pretrained: true
-  embedding_dim: 512
+  embedding_dim: 128
   normalize_embeddings: true
   classifier_head:
     enabled: false
@@ -54,42 +54,37 @@ model:
 loss:
   name: triplet
   params:
-    margin: 0.1
+    mining_margin: 0.5
     normalize_embeddings: false
-    margin_curriculum:
-      schedule: constant #constant, step, linear
-      start: 0.2
-      end: 0.2
-      warmup_epochs: 0
     mining_curriculum: # easy_semi_hard, semi_hard, hard
       phase1: easy_semi_hard
       phase2: semi_hard
-      phase3: hard
+      phase3: semi-hard
       phase1_epochs: 20
-      phase2_epochs: 60 # + phase1_epochs
+      phase2_epochs: 100 # + phase1_epochs
 
 train:
   epochs: 100
   batch_size: 512
-  eval_every: 1
+  eval_every: 5
   log_every_steps: 100
   sampler:
-    p: 24
-    k: 3
+    p: 64
+    k: 4
     shuffle: true
     drop_last: true
   optimizer:
     name: adamw
-    lr: 0.0003
-    weight_decay: 0.0001
+    lr: 0.0001
+    weight_decay: 0.01
   scheduler:
     name: cosine
     params:
-      t_max: 120
+      t_max: 100
       min_lr: 0.000001
   grad_clip:
-    enabled: false
-    max_norm: 1.0
+    enabled: true
+    max_norm: 5.0
 
 retrieval_eval:
   enabled: true
@@ -110,5 +105,5 @@ checkpoint:
   save_last: true
   save_best: true
   save_every_n_epochs: 5
-  monitor: train_loss
-  mode: min
+  monitor: val_map_at_5
+  mode: max
