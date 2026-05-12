@@ -429,18 +429,16 @@ class SupervisedTrainer:
                 val_metrics.epoch = epoch
                 epoch_payload["val"] = asdict(val_metrics)
                 last_val_metrics = val_metrics
-            elif last_val_metrics is not None:
-                epoch_payload["val"] = asdict(last_val_metrics)
                 
             monitor_value = self._resolve_monitor_value(train_metrics, val_metrics or last_val_metrics)
 
             if self.scheduler is not None:
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     if val_metrics is not None or not self.monitor.startswith("val_"):
-                        self.scheduler.step(monitor_value)
+                        self.scheduler.step()
                 else:
                     try:
-                        self.scheduler.step(monitor_value)
+                        self.scheduler.step()
                     except TypeError:
                         self.scheduler.step()
 
@@ -738,17 +736,15 @@ def train_triplet_learning(
             val_metrics.epoch = epoch
             epoch_payload["val"] = asdict(val_metrics)
             last_val_metrics = val_metrics
-        elif last_val_metrics is not None:
-            epoch_payload["val"] = asdict(last_val_metrics)
 
         monitor_value = resolve_monitor_value(metrics, val_metrics or last_val_metrics)
         if scheduler is not None and hasattr(scheduler, "step"):
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 if val_metrics is not None or not monitor.startswith("val_"):
-                    scheduler.step(monitor_value)
+                    scheduler.step()
             else:
                 try:
-                    scheduler.step(monitor_value)
+                    scheduler.step()
                 except TypeError:
                     scheduler.step()
         is_best = is_better(float(monitor_value))
