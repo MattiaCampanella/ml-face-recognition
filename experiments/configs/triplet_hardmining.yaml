@@ -54,14 +54,14 @@ model:
 loss:
   name: triplet
   params:
-    mining_margin: 0.5
-    normalize_embeddings: false
+    mining_margin: 0.2
+    normalize_embeddings: true
     mining_curriculum: # easy_semi_hard, semi_hard, hard
       phase1: easy_semi_hard
       phase2: semi_hard
-      phase3: semi-hard
-      phase1_epochs: 20
-      phase2_epochs: 100 # + phase1_epochs
+      phase3: hard
+      phase1_epochs: 5
+      phase2_epochs: 40 # + phase1_epochs
 
 train:
   epochs: 100
@@ -69,13 +69,13 @@ train:
   eval_every: 5
   log_every_steps: 100
   sampler:
-    p: 64
+    p: 24
     k: 4
     shuffle: true
     drop_last: true
   optimizer:
     name: adamw
-    lr: 0.0001
+    lr: 0.0003
     weight_decay: 0.01
   scheduler:
     name: cosine

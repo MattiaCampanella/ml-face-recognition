@@ -74,21 +74,28 @@ def _resolve_split_file(config: dict) -> Path:
 
 def main() -> None:
 	args = _parse_args()
+	print(f"[train] Loading config: {args.config}")
 	loaded = load_yaml_config(args.config)
 	config = loaded.data
 	loss_cfg = config.get("loss", {})
 	loss_name = str(loss_cfg.get("name", "cross_entropy")).lower()
+	print(f"[train] Loss: {loss_name}")
 
 	seed_cfg = config.get("system", {})
+	print("[train] Setting random seeds.")
 	set_seed(
 		seed=int(seed_cfg.get("seed", 42)),
 		deterministic=bool(seed_cfg.get("deterministic", True)),
 		benchmark=bool(seed_cfg.get("benchmark", False)),
 	)
 
+	print("[train] Resolving dataset paths.")
 	data_root = _resolve_data_root(config)
 	split_file = _resolve_split_file(config)
+	print(f"[train] Data root: {data_root}")
+	print(f"[train] Split file: {split_file}")
 
+	print("[train] Building datasets.")
 	train_label_mapping = build_train_label_mapping(split_file)
 	train_dataset = CasiaFaceDataset(
 		data_root=data_root,
@@ -107,6 +114,10 @@ def main() -> None:
 		train=False,
 		label_mapping=train_label_mapping,
 		drop_unmapped_labels=False,
+	)
+	print(
+		"[train] Datasets ready. "
+		f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}"
 	)
 	val_loader = DataLoader(
 		val_dataset,
@@ -136,6 +147,7 @@ def main() -> None:
 	if loss_name == "triplet":
 		classifier_enabled = False
 
+	print("[train] Building model.")
 	model = build_baseline_resnet18(
 		pretrained=bool(model_cfg.get("pretrained", True)),
 		embedding_dim=int(model_cfg.get("embedding_dim", 512)),
@@ -144,8 +156,10 @@ def main() -> None:
 	)
 
 	if hasattr(torch, "compile"):
+		print("[train] Compiling model with torch.compile().")
 		model = torch.compile(model)
 
+	print("[train] Building optimizer/scheduler.")
 	optimizer = _build_optimizer(model, config)
 	scheduler = _build_scheduler(optimizer, config)
 	output_cfg = config.get("output", {})
@@ -153,6 +167,7 @@ def main() -> None:
 	run_name = make_run_name(config)
 	run_dir = ensure_dir(run_root / run_name)
 	checkpoints_dir = ensure_dir(run_dir / output_cfg.get("dirs", {}).get("checkpoints", "checkpoints"))
+	print(f"[train] Run directory: {run_dir}")
 	grad_clip_cfg = config["train"].get("grad_clip", {})
 	grad_clip_max_norm = (
 		float(grad_clip_cfg.get("max_norm", 1.0)) if bool(grad_clip_cfg.get("enabled", False)) else None
@@ -177,6 +192,7 @@ def main() -> None:
 	val_l2_normalize = bool(retrieval_cfg.get("l2_normalize", True))
 
 	if loss_name == "triplet":
+		print("[train] Preparing PK sampler and loaders for triplet training.")
 		sampler_cfg = config["train"].get("sampler", {})
 		p = int(sampler_cfg.get("p", 16))
 		k = int(sampler_cfg.get("k", 4))
@@ -205,6 +221,7 @@ def main() -> None:
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
 			persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 		)
+		print("[train] Starting triplet training loop.")
 		history = train_triplet_learning(
 			model=model,
 			train_loader=train_loader,
@@ -233,6 +250,7 @@ def main() -> None:
 			eval_every=eval_every,
 		)
 	else:
+		print("[train] Preparing loaders for supervised training.")
 		train_loader = DataLoader(
 			train_dataset,
 			batch_size=int(config["train"].get("batch_size", 64)),
@@ -241,6 +259,7 @@ def main() -> None:
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
 			persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 		)
+		print("[train] Starting supervised training loop.")
 		history = train_supervised(
 			model=model,
 			train_loader=train_loader,
@@ -263,6 +282,7 @@ def main() -> None:
 			eval_every=eval_every,
 		)
 
+	print("[train] Saving training artifacts.")
 	save_json(run_dir / "training_history.json", history)
 	print(f"Training complete. Artifacts saved to {run_dir}")
 

@@ -63,14 +63,20 @@ def _select_targets(labels: torch.Tensor, identity_ids: torch.Tensor | None) -> 
 
 def main() -> None:
 	args = _parse_args()
+	print(f"[eval] Loading config: {args.config}")
 	config = load_yaml_config(args.config).data
+	print(f"[eval] Device: {args.device}")
 	device = _resolve_device(args.device)
 
 	data_cfg = config["data"]
+	print("[eval] Resolving dataset paths.")
 	data_root = resolve_repo_path(data_cfg["root_dir"])
 	split_file = resolve_repo_path(data_cfg["split_file"])
 	image_size = int(data_cfg.get("image_size", 224))
+	print(f"[eval] Data root: {data_root}")
+	print(f"[eval] Split file: {split_file}")
 
+	print("[eval] Building dataset and dataloader.")
 	label_mapping = build_train_label_mapping(split_file)
 	dataset = CasiaFaceDataset(
 		data_root=data_root,
@@ -88,11 +94,13 @@ def main() -> None:
 		num_workers=args.num_workers,
 		pin_memory=True,
 	)
+	print(f"[eval] Dataset ready. Samples: {len(dataset)}")
 
 	model_cfg = config["model"]
 	classifier_cfg = model_cfg.get("classifier_head", {})
 	num_classes = int(classifier_cfg.get("num_classes") or len(label_mapping))
 	classifier_enabled = bool(classifier_cfg.get("enabled", True))
+	print("[eval] Building model.")
 	model = build_baseline_resnet18(
 		pretrained=bool(model_cfg.get("pretrained", True)),
 		embedding_dim=int(model_cfg.get("embedding_dim", 512)),
@@ -104,10 +112,14 @@ def main() -> None:
 	checkpoint_path = resolve_repo_path(args.checkpoint) if args.checkpoint else _find_latest_checkpoint(runs_root)
 	if not checkpoint_path.exists():
 		raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+	print(f"[eval] Checkpoint: {checkpoint_path}")
 
 	artifact_dir = ensure_dir(Path(args.output_dir) if args.output_dir else _infer_output_dir(checkpoint_path))
+	print(f"[eval] Artifact dir: {artifact_dir}")
+	print("[eval] Loading checkpoint.")
 	_load_checkpoint(model, checkpoint_path, device)
 
+	print("[eval] Extracting embeddings.")
 	embeddings, labels, identity_ids = extract_embeddings(
 		model,
 		dataloader,
@@ -116,6 +128,7 @@ def main() -> None:
 		return_identity_ids=True,
 		amp_enabled=bool(config.get("system", {}).get("amp", False)),
 	)
+	print("[eval] Computing retrieval metrics.")
 	targets = _select_targets(labels, identity_ids)
 	topk = args.topk if args.topk else list(config.get("retrieval_eval", {}).get("topk", [1, 5, 10]))
 	retrieval_cfg = config.get("retrieval_eval", {})
@@ -170,6 +183,7 @@ def main() -> None:
 	]
 	examples_path.write_text(json.dumps(examples_payload, indent=2) + "\n", encoding="utf-8")
 
+	print("[eval] Saved evaluation artifacts.")
 	print(f"Retrieval evaluation complete. Artifacts saved to {artifact_dir}")
 	print(json.dumps(summary["map_at_k"], indent=2))
 
