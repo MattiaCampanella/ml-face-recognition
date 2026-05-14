@@ -157,7 +157,7 @@ def main() -> None:
 
 	if hasattr(torch, "compile"):
 		print("[train] Compiling model with torch.compile().")
-		model = torch.compile(model)
+		# model = torch.compile(model)
 
 	print("[train] Building optimizer/scheduler.")
 	optimizer = _build_optimizer(model, config)

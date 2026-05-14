@@ -48,21 +48,45 @@ def retrieve_topk(
 	topk: int = 10,
 	metric: str = "cosine",
 	l2_normalize: bool = True,
+	similarity: Optional[Tensor] = None,
+	query_indices: Optional[Iterable[int]] = None,
+	max_queries: Optional[int] = None,
 ) -> list[RetrievalSearchResult]:
 	if embeddings.ndim != 2:
 		raise ValueError(f"embeddings must be 2D, got shape {tuple(embeddings.shape)}")
 	if targets.ndim != 1:
 		targets = targets.view(-1)
+	if embeddings.size(0) != targets.numel():
+		raise ValueError("embeddings and targets must have the same number of rows.")
+	if max_queries is not None and max_queries < 0:
+		raise ValueError("max_queries must be >= 0 when provided.")
 
-	similarity = pairwise_similarity(embeddings, metric=metric, l2_normalize=l2_normalize)
+	if similarity is None:
+		similarity = pairwise_similarity(embeddings, metric=metric, l2_normalize=l2_normalize)
+	else:
+		if similarity.ndim != 2 or similarity.shape[0] != similarity.shape[1]:
+			raise ValueError("similarity must be a square matrix.")
+		if similarity.shape[0] != embeddings.shape[0]:
+			raise ValueError("similarity must have the same number of rows as embeddings.")
 	targets_np = targets.detach().cpu().numpy()
 	results: list[RetrievalSearchResult] = []
 
-	for query_index in range(similarity.size(0)):
-		scores = similarity[query_index].clone()
-		scores[query_index] = float("-inf")
-		candidate_count = max(0, scores.numel() - 1)
-		if candidate_count == 0:
+	num_samples = similarity.size(0)
+	if query_indices is None:
+		query_indices_list = list(range(num_samples))
+	else:
+		query_indices_list = [int(index) for index in query_indices]
+		for index in query_indices_list:
+			if index < 0 or index >= num_samples:
+				raise IndexError(f"query index {index} is out of range for {num_samples} samples.")
+	if max_queries is not None:
+		query_indices_list = query_indices_list[: int(max_queries)]
+	if not query_indices_list:
+		return results
+
+	candidate_count = max(0, num_samples - 1)
+	if candidate_count == 0:
+		for query_index in query_indices_list:
 			results.append(
 				RetrievalSearchResult(
 					query_index=query_index,
@@ -72,17 +96,51 @@ def retrieve_topk(
 					top_scores=[],
 				)
 			)
-			continue
+		return results
 
-		values, indices = torch.topk(scores, k=min(topk, candidate_count))
+	k = min(topk, candidate_count)
+	if query_indices is None and max_queries is None:
+		original_diag = similarity.diag().clone()
+		similarity.fill_diagonal_(float("-inf"))
+		values, indices = torch.topk(similarity, k=k, dim=1)
+		similarity.diagonal().copy_(original_diag)
+
 		indices_list = indices.detach().cpu().tolist()
+		values_list = values.detach().cpu().tolist()
+
+		for query_index in range(num_samples):
+			top_indices = indices_list[query_index]
+			top_scores = values_list[query_index]
+			results.append(
+				RetrievalSearchResult(
+					query_index=query_index,
+					query_label=int(targets_np[query_index]),
+					top_indices=top_indices,
+					top_labels=[int(targets_np[index]) for index in top_indices],
+					top_scores=[float(score) for score in top_scores],
+				)
+			)
+		return results
+
+	query_tensor = torch.tensor(query_indices_list, device=similarity.device, dtype=torch.long)
+	scores = similarity.index_select(0, query_tensor).clone()
+	row_indices = torch.arange(query_tensor.numel(), device=similarity.device)
+	scores[row_indices, query_tensor] = float("-inf")
+	values, indices = torch.topk(scores, k=k, dim=1)
+
+	indices_list = indices.detach().cpu().tolist()
+	values_list = values.detach().cpu().tolist()
+
+	for offset, query_index in enumerate(query_indices_list):
+		top_indices = indices_list[offset]
+		top_scores = values_list[offset]
 		results.append(
 			RetrievalSearchResult(
 				query_index=query_index,
 				query_label=int(targets_np[query_index]),
-				top_indices=indices_list,
-				top_labels=[int(targets_np[index]) for index in indices_list],
-				top_scores=[float(score) for score in values.detach().cpu().tolist()],
+				top_indices=top_indices,
+				top_labels=[int(targets_np[index]) for index in top_indices],
+				top_scores=[float(score) for score in top_scores],
 			)
 		)
 
