@@ -41,7 +41,7 @@ def retrieval_map_at_k(similarity_matrix: torch.Tensor, targets: torch.Tensor, t
 	ks = sorted({int(k) for k in topk if int(k) > 0})
 	if not ks:
 		raise ValueError("topk must contain at least one positive integer.")
-		
+
 	max_k = max(ks)
 	num_samples = similarity_matrix.shape[0]
 	
@@ -58,53 +58,45 @@ def retrieval_map_at_k(similarity_matrix: torch.Tensor, targets: torch.Tensor, t
 
 	# Restore diagonal to preserve original matrix
 	similarity_matrix.diagonal().copy_(original_diag)
-	
-	# Compute matched labels
-	# Avoid O(N^2) memory footprint by counting global target occurrences instead of an NxN mask
-	unique_labels, counts = torch.unique(targets, return_counts=True)
-	label_counts = {k.item(): v.item() for k, v in zip(unique_labels, counts)}
-	# For each query, the number of relevant items is the total count of that label minus 1 (itself)
-	total_relevant_per_query = torch.tensor(
-		[label_counts[t.item()] - 1 for t in targets],
-		device=targets.device
-	)
-	
+
+	# Compute matched labels without CPU roundtrips
+	_, inverse_indices, counts = torch.unique(targets, return_inverse=True, return_counts=True)
+	total_relevant_per_query = counts[inverse_indices] - 1
+	valid_queries_mask = total_relevant_per_query > 0
+	queries = int(valid_queries_mask.sum().item())
+
+	if queries == 0:
+		map_values = {k: 0.0 for k in ks}
+		return RetrievalMetrics(map_at_k=map_values, queries_evaluated=0, mean_relevant_per_query=0.0)
+
 	topk_labels = targets[topk_indices]
 	relevance = (topk_labels == targets.unsqueeze(1))
-	
-	# Move to CPU for the sequence evaluation
-	relevance_np = relevance.cpu().numpy()
-	total_relevant_np = total_relevant_per_query.cpu().numpy()
-	
-	map_totals = {k: 0.0 for k in ks}
-	queries = 0
-	relevant_counts: list[int] = []
 
-	for query_index in range(num_samples):
-		rel_count = int(total_relevant_np[query_index])
-		if rel_count == 0:
+	max_k_eff = topk_indices.size(1)
+	relevance_float = relevance.to(dtype=torch.float32)
+	cumulative_hits = torch.cumsum(relevance_float, dim=1)
+	ranks = torch.arange(1, max_k_eff + 1, device=relevance.device, dtype=torch.float32).view(1, -1)
+	precision_at_rank = cumulative_hits / ranks
+	precision_at_rank = precision_at_rank * relevance_float
+	precision_cumsum = torch.cumsum(precision_at_rank, dim=1)
+
+	denominator_base = total_relevant_per_query.to(dtype=torch.float32)
+	map_values: dict[int, float] = {}
+	for k in ks:
+		k_val = int(k)
+		k_eff = min(k_val, max_k_eff)
+		if k_eff <= 0:
+			map_values[k_val] = 0.0
 			continue
+		precision_sum = precision_cumsum[:, k_eff - 1]
+		denominator = torch.clamp(denominator_base, max=float(k_val))
+		ap = torch.zeros_like(denominator_base, dtype=torch.float32)
+		ap[valid_queries_mask] = precision_sum[valid_queries_mask] / denominator[valid_queries_mask]
+		map_values[k_val] = float(ap[valid_queries_mask].mean().item())
 
-		queries += 1
-		relevant_counts.append(rel_count)
-		query_relevance = relevance_np[query_index]
-
-		for k in ks:
-			truncated = query_relevance[:k]
-			if not truncated.any():
-				continue
-
-			hits = 0.0
-			precision_sum = 0.0
-			for rank, is_relevant in enumerate(truncated, start=1):
-				if is_relevant:
-					hits += 1.0
-					precision_sum += hits / rank
-
-			denominator = min(rel_count, k)
-			if denominator > 0:
-				map_totals[k] += precision_sum / float(denominator)
-
-	map_values = {k: (map_totals[k] / queries if queries > 0 else 0.0) for k in ks}
-	mean_relevant = float(np.mean(relevant_counts)) if relevant_counts else 0.0
-	return RetrievalMetrics(map_at_k=map_values, queries_evaluated=queries, mean_relevant_per_query=mean_relevant)
+	mean_relevant = float(denominator_base[valid_queries_mask].mean().item())
+	return RetrievalMetrics(
+		map_at_k=map_values,
+		queries_evaluated=queries,
+		mean_relevant_per_query=mean_relevant,
+	)

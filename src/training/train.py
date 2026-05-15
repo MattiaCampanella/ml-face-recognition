@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from src.datasets.face_dataset import CasiaFaceDataset, build_train_label_mapping
 from src.datasets.loaders import PKBatchSampler
 from src.models.resnet18 import build_baseline_resnet18
-from src.training.trainer import train_supervised, train_triplet_learning
+from src.training.trainer import EarlyStoppingConfig, train_supervised, train_triplet_learning
 from src.utils.config import ensure_dir, load_yaml_config, make_run_name, resolve_repo_path, save_json
 from src.utils.seed import set_seed
 
@@ -157,7 +157,7 @@ def main() -> None:
 
 	if hasattr(torch, "compile"):
 		print("[train] Compiling model with torch.compile().")
-		model = torch.compile(model)
+		# model = torch.compile(model)
 
 	print("[train] Building optimizer/scheduler.")
 	optimizer = _build_optimizer(model, config)
@@ -190,6 +190,15 @@ def main() -> None:
 	val_topk = tuple(int(k) for k in retrieval_cfg.get("topk", [1, 5, 10]))
 	val_metric = str(retrieval_cfg.get("distance", "cosine"))
 	val_l2_normalize = bool(retrieval_cfg.get("l2_normalize", True))
+	early_cfg = config["train"].get("early_stopping")
+	early_stopping = None
+	if isinstance(early_cfg, dict) and bool(early_cfg.get("enabled", False)):
+		early_stopping = EarlyStoppingConfig(
+			enabled=True,
+			patience=int(early_cfg.get("patience", 10)),
+			min_delta=float(early_cfg.get("min_delta", 0.0)),
+			min_epochs=int(early_cfg.get("min_epochs", 0)),
+		)
 
 	if loss_name == "triplet":
 		print("[train] Preparing PK sampler and loaders for triplet training.")
@@ -248,6 +257,7 @@ def main() -> None:
 			val_retrieval_metric=val_metric,
 			val_retrieval_l2_normalize=val_l2_normalize,
 			eval_every=eval_every,
+			early_stopping=early_stopping,
 		)
 	else:
 		print("[train] Preparing loaders for supervised training.")
@@ -280,6 +290,7 @@ def main() -> None:
 			val_retrieval_metric=val_metric,
 			val_retrieval_l2_normalize=val_l2_normalize,
 			eval_every=eval_every,
+			early_stopping=early_stopping,
 		)
 
 	print("[train] Saving training artifacts.")

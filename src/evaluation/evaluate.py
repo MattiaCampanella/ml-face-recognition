@@ -142,12 +142,15 @@ def main() -> None:
 		metric=metric_name,
 		l2_normalize=l2_normalize,
 	)
+	example_limit = 20
 	results = retrieve_topk(
 		embeddings,
 		targets,
 		topk=max(topk),
 		metric=metric_name,
 		l2_normalize=l2_normalize,
+		similarity=similarity,
+		max_queries=example_limit,
 	)
 
 	targets_np = targets.detach().cpu().numpy()
@@ -179,7 +182,7 @@ def main() -> None:
 			"top_labels": result.top_labels,
 			"top_scores": result.top_scores,
 		}
-		for result in results[: min(20, len(results))]
+		for result in results
 	]
 	examples_path.write_text(json.dumps(examples_payload, indent=2) + "\n", encoding="utf-8")
 
