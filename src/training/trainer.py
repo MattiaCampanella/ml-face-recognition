@@ -36,6 +36,57 @@ class RetrievalEpochMetrics:
     elapsed_seconds: float
 
 
+@dataclass(frozen=True)
+class EarlyStoppingConfig:
+    enabled: bool = False
+    patience: int = 10
+    min_delta: float = 0.0
+    min_epochs: int = 0
+
+
+class EarlyStopping:
+    def __init__(
+        self,
+        *,
+        patience: int,
+        min_delta: float,
+        mode: str,
+        min_epochs: int = 0,
+    ) -> None:
+        if patience < 0:
+            raise ValueError(f"patience must be >= 0, got {patience}.")
+        if min_epochs < 0:
+            raise ValueError(f"min_epochs must be >= 0, got {min_epochs}.")
+        if mode not in {"min", "max"}:
+            raise ValueError("mode must be one of {'min', 'max' }.")
+
+        self.patience = int(patience)
+        self.min_delta = float(min_delta)
+        self.mode = mode
+        self.min_epochs = int(min_epochs)
+        self.best: Optional[float] = None
+        self.bad_epochs = 0
+
+    def _is_improvement(self, value: float) -> bool:
+        if self.best is None:
+            return True
+        if self.mode == "min":
+            return value < self.best - self.min_delta
+        return value > self.best + self.min_delta
+
+    def step(self, value: float, *, epoch: int) -> bool:
+        improved = self._is_improvement(value)
+        if improved:
+            self.best = value
+            self.bad_epochs = 0
+        else:
+            self.bad_epochs += 1
+
+        if epoch <= self.min_epochs:
+            return False
+        return self.bad_epochs >= self.patience
+
+
 def _resolve_device(device: str | torch.device) -> torch.device:
     if isinstance(device, torch.device):
         return device
@@ -280,6 +331,7 @@ class SupervisedTrainer:
         val_retrieval_metric: str = "cosine",
         val_retrieval_l2_normalize: bool = True,
         eval_every: int = 5,
+        early_stopping: Optional[EarlyStoppingConfig] = None,
     ) -> None:
         self.device = _resolve_device(device)
         self.model = model.to(self.device)
@@ -310,6 +362,14 @@ class SupervisedTrainer:
 
         self.history: list[dict[str, Any]] = []
         self.best_value: Optional[float] = None
+        self.early_stopper: Optional[EarlyStopping] = None
+        if early_stopping is not None and early_stopping.enabled:
+            self.early_stopper = EarlyStopping(
+                patience=early_stopping.patience,
+                min_delta=early_stopping.min_delta,
+                mode=self.monitor_mode,
+                min_epochs=early_stopping.min_epochs,
+            )
 
     def _is_better(self, value: float) -> bool:
         if self.best_value is None:
@@ -429,18 +489,17 @@ class SupervisedTrainer:
                 val_metrics.epoch = epoch
                 epoch_payload["val"] = asdict(val_metrics)
                 last_val_metrics = val_metrics
-                
+
+            monitor_is_val = self.monitor.startswith("val_")
+            monitor_ready = (not monitor_is_val) or (val_metrics is not None)
             monitor_value = self._resolve_monitor_value(train_metrics, val_metrics or last_val_metrics)
 
             if self.scheduler is not None:
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    if val_metrics is not None or not self.monitor.startswith("val_"):
-                        self.scheduler.step()
+                    if monitor_ready:
+                        self.scheduler.step(float(monitor_value))
                 else:
-                    try:
-                        self.scheduler.step()
-                    except TypeError:
-                        self.scheduler.step()
+                    self.scheduler.step()
 
             is_best = self._is_better(float(monitor_value))
             if is_best:
@@ -450,6 +509,17 @@ class SupervisedTrainer:
 
             epoch_payload["monitor_value"] = float(monitor_value)
             epoch_payload["is_best"] = is_best
+            early_stop_triggered = False
+            if self.early_stopper is not None and monitor_ready:
+                if self.early_stopper.step(float(monitor_value), epoch=epoch):
+                    early_stop_triggered = True
+                    epoch_payload["early_stop"] = {
+                        "epoch": epoch,
+                        "monitor": self.monitor,
+                        "best_value": self.early_stopper.best,
+                        "patience": self.early_stopper.patience,
+                        "min_delta": self.early_stopper.min_delta,
+                    }
             self.history.append(epoch_payload)
             self._save_history()
 
@@ -482,6 +552,15 @@ class SupervisedTrainer:
                     f"best={self.best_value:.4f}"
                 )
 
+            if early_stop_triggered:
+                best_value = self.early_stopper.best if self.early_stopper is not None else None
+                best_str = f"{best_value:.4f}" if best_value is not None else "n/a"
+                print(
+                    f"[early stopping] epoch={epoch:03d} monitor={self.monitor} best={best_str} "
+                    f"patience={self.early_stopper.patience if self.early_stopper is not None else 0}"
+                )
+                break
+
         return self.history
 
 
@@ -506,6 +585,7 @@ def train_supervised(
     val_retrieval_metric: str = "cosine",
     val_retrieval_l2_normalize: bool = True,
     eval_every: int = 5,
+    early_stopping: Optional[EarlyStoppingConfig] = None,
 ) -> list[dict[str, Any]]:
     """Functional wrapper around SupervisedTrainer.fit for easier script integration."""
     trainer = SupervisedTrainer(
@@ -525,6 +605,7 @@ def train_supervised(
         val_retrieval_metric=val_retrieval_metric,
         val_retrieval_l2_normalize=val_retrieval_l2_normalize,
         eval_every=eval_every,
+        early_stopping=early_stopping,
     )
     return trainer.fit(train_loader=train_loader, val_loader=val_loader, epochs=epochs)
 
@@ -646,6 +727,7 @@ def train_triplet_learning(
     val_retrieval_metric: str = "cosine",
     val_retrieval_l2_normalize: bool = True,
     eval_every: int = 5,
+    early_stopping: Optional[EarlyStoppingConfig] = None,
 ) -> list[dict[str, Any]]:
     if epochs <= 0:
         raise ValueError(f"epochs must be > 0, got {epochs}.")
@@ -666,6 +748,14 @@ def train_triplet_learning(
     history: list[dict[str, Any]] = []
     best_value: Optional[float] = None
     last_val_metrics: Optional[RetrievalEpochMetrics] = None
+    early_stopper: Optional[EarlyStopping] = None
+    if early_stopping is not None and early_stopping.enabled:
+        early_stopper = EarlyStopping(
+            patience=early_stopping.patience,
+            min_delta=early_stopping.min_delta,
+            mode=monitor_mode,
+            min_epochs=early_stopping.min_epochs,
+        )
 
     def is_better(value: float) -> bool:
         nonlocal best_value
@@ -737,16 +827,15 @@ def train_triplet_learning(
             epoch_payload["val"] = asdict(val_metrics)
             last_val_metrics = val_metrics
 
+        monitor_is_val = monitor.startswith("val_")
+        monitor_ready = (not monitor_is_val) or (val_metrics is not None)
         monitor_value = resolve_monitor_value(metrics, val_metrics or last_val_metrics)
         if scheduler is not None and hasattr(scheduler, "step"):
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                if val_metrics is not None or not monitor.startswith("val_"):
-                    scheduler.step()
+                if monitor_ready:
+                    scheduler.step(float(monitor_value))
             else:
-                try:
-                    scheduler.step()
-                except TypeError:
-                    scheduler.step()
+                scheduler.step()
         is_best = is_better(float(monitor_value))
         if is_best:
             best_value = float(monitor_value)
@@ -771,6 +860,17 @@ def train_triplet_learning(
         epoch_payload["mining_strategy"] = mining_strategy
         epoch_payload["mining_phase1_epochs"] = int(mining_phase1_epochs)
         epoch_payload["mining_phase2_epochs"] = int(mining_phase2_epochs)
+        early_stop_triggered = False
+        if early_stopper is not None and monitor_ready:
+            if early_stopper.step(float(monitor_value), epoch=epoch):
+                early_stop_triggered = True
+                epoch_payload["early_stop"] = {
+                    "epoch": epoch,
+                    "monitor": monitor,
+                    "best_value": early_stopper.best,
+                    "patience": early_stopper.patience,
+                    "min_delta": early_stopper.min_delta,
+                }
         history.append(epoch_payload)
 
         if checkpoint_path is not None:
@@ -795,5 +895,14 @@ def train_triplet_learning(
                 f"hard_pos={metrics.hard_positive_distance:.4f} hard_neg={metrics.hard_negative_distance:.4f} "
                 f"valid_anchors={metrics.valid_anchors}/{metrics.total_anchors} mining={mining_strategy} best={best_value:.4f}"
             )
+
+        if early_stop_triggered:
+            best_value_str = f"{early_stopper.best:.4f}" if early_stopper and early_stopper.best is not None else "n/a"
+            patience = early_stopper.patience if early_stopper is not None else 0
+            print(
+                f"[early stopping] epoch={epoch:03d} monitor={monitor} best={best_value_str} "
+                f"patience={patience}"
+            )
+            break
 
     return history
