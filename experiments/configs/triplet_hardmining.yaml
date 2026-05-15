@@ -45,7 +45,7 @@ data:
 model:
   backbone: resnet18
   pretrained: true
-  embedding_dim: 128
+  embedding_dim: 512
   normalize_embeddings: true
   classifier_head:
     enabled: false
@@ -54,22 +54,22 @@ model:
 loss:
   name: triplet
   params:
-    mining_margin: 0.2
+    mining_margin: 0.1
     normalize_embeddings: true
     mining_curriculum: # easy_semi_hard, semi_hard, hard
-      phase1: easy_semi_hard
-      phase2: semi_hard
+      phase1: semi-hard
+      phase2: hard
       phase3: hard
       phase1_epochs: 5
-      phase2_epochs: 40 # + phase1_epochs
+      phase2_epochs: 100 # + phase1_epochs
 
 train:
-  epochs: 100
+  epochs: 30
   batch_size: 512
-  eval_every: 5
+  eval_every: 1
   log_every_steps: 100
   sampler:
-    p: 24
+    p: 32
     k: 4
     shuffle: true
     drop_last: true
@@ -80,8 +80,13 @@ train:
   scheduler:
     name: cosine
     params:
-      t_max: 100
+      t_max: 30
       min_lr: 0.000001
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+    min_epochs: 10
   grad_clip:
     enabled: true
     max_norm: 5.0
