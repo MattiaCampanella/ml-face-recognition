@@ -3,8 +3,8 @@ version: 1
 project:
   name: ml-face-recognition
   task: face-metric-learning
-  experiment: triplet-hardmining
-  notes: "Triplet loss with batch-hard mining and PK sampling."
+  experiment: arcface
+  notes: "ArcFace (Additive Angular Margin Loss) — Deng et al., CVPR 2019."
 
 output:
   root_dir: experiments/runs
@@ -46,38 +46,38 @@ model:
   backbone: resnet18
   pretrained: true
   embedding_dim: 512
-  normalize_embeddings: false
+  # ArcFace requires L2-normalised embeddings — forced True by train.py even if
+  # set to false here, but kept explicit for clarity.
+  normalize_embeddings: true
   classifier_head:
-    enabled: false
+    enabled: false   # ArcFace head lives inside the loss, not the model
     num_classes: null
 
 loss:
-  name: triplet
+  name: arcface
   params:
-    margin: 0.1
-    normalize_embeddings: false
-    margin_type: hinge  # soft (softplus, no explicit margin) | hinge (relu + margin)
-    mining_curriculum: # easy_semi_hard, semi_hard, hard
-      phase1: hard
-      phase2: hard
-      phase3: hard
-      phase1_epochs: 100
-      phase2_epochs: 100 # + phase1_epochs
+    # Feature scale. Paper (Deng et al., Table 2) uses s=64 on CASIA.
+    # With a smaller backbone (ResNet18) and AdamW, s=64 should still
+    # converge; fall back to s=30 if training is unstable in early epochs.
+    s: 64.0
+    # Angular margin in radians. m=0.5 is confirmed as optimal on CASIA
+    # across the paper's ablation study (Table 2: m in {0.4, 0.45, 0.5, 0.55}).
+    m: 0.5
+    # Number of sub-centers per class (k=1 is standard ArcFace, k=3 in Sub-center ArcFace paper)
+    k: 3
+    # easy_margin=true only applies the margin when cos(θ) > 0.
+    # Recommended: false (standard formulation from the paper).
+    easy_margin: false
 
 train:
   epochs: 30
-  batch_size: 512
+  batch_size: 64
   eval_every: 1
   log_every_steps: 100
-  sampler:
-    p: 32
-    k: 4
-    shuffle: true
-    drop_last: true
   optimizer:
     name: adamw
-    lr: 0.0003
-    weight_decay: 0.01
+    lr: 0.0001          # slightly lower than cross-entropy baseline (0.0003)
+    weight_decay: 0.0001
   scheduler:
     name: cosine
     params:
@@ -95,7 +95,7 @@ train:
 retrieval_eval:
   enabled: true
   distance: cosine
-  l2_normalize: true
+  l2_normalize: true    # embeddings are already L2-normalised by the model
   topk: [1, 5, 10]
   batch_size: 128
 

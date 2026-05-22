@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from src.evaluation.clustering import extract_embeddings
 from src.evaluation.retrieval import evaluate_retrieval
-from src.models.losses import TripletMiningStats, batch_hard_triplet_loss
+from src.models.losses import ArcFaceLoss, TripletMiningStats, batch_hard_triplet_loss
 
 
 @dataclass
@@ -173,6 +173,8 @@ def run_train_epoch(
     log_every_steps: int = 50,
 ) -> EpochMetrics:
     model.train()
+    if isinstance(criterion, ArcFaceLoss):
+        criterion.train()
 
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled and device.type == "cuda")
 
@@ -180,6 +182,7 @@ def run_train_epoch(
     total_correct = 0
     total_samples = 0
     start_t = time.perf_counter()
+    _arcface_mode = isinstance(criterion, ArcFaceLoss)
 
     for step, batch in enumerate(dataloader, start=1):
         images, labels = _move_batch_to_device(batch, device)
@@ -188,22 +191,32 @@ def run_train_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with torch.amp.autocast("cuda", enabled=amp_enabled and device.type == "cuda"):
-            logits = _forward_logits(model, images)
-            loss = criterion(logits, labels)
+            if _arcface_mode:
+                # ArcFace: criterion takes (embeddings, labels) and returns loss.
+                # The model produces L2-normalised embeddings; no classifier head.
+                embeddings = _forward_embeddings(model, images)
+                loss = criterion(embeddings, labels)
+                # No direct logits -> accuracy is not meaningful during ArcFace training.
+                batch_correct = 0
+            else:
+                logits = _forward_logits(model, images)
+                loss = criterion(logits, labels)
+                batch_correct = int((torch.argmax(logits, dim=1) == labels).sum().item())
 
         scaler.scale(loss).backward()
 
         if grad_clip_max_norm is not None:
             scaler.unscale_(optimizer)
-            nn.utils.clip_grad_norm_(model.parameters(), grad_clip_max_norm)
+            # Clip both model and criterion params (ArcFace W is also a param).
+            all_params = list(model.parameters()) + list(criterion.parameters())
+            nn.utils.clip_grad_norm_(all_params, grad_clip_max_norm)
 
         scaler.step(optimizer)
         scaler.update()
 
         with torch.no_grad():
-            batch_correct = (torch.argmax(logits, dim=1) == labels).sum().item()
             total_loss += loss.item() * batch_size
-            total_correct += int(batch_correct)
+            total_correct += batch_correct
             total_samples += batch_size
 
         if log_every_steps > 0 and step % log_every_steps == 0:
@@ -420,6 +433,10 @@ class SupervisedTrainer:
         if self.scheduler is not None and hasattr(self.scheduler, "state_dict"):
             payload["scheduler_state_dict"] = self.scheduler.state_dict()
 
+        # Persist ArcFaceLoss W matrix for resume and post-hoc analysis.
+        if isinstance(self.criterion, ArcFaceLoss):
+            payload["criterion_state_dict"] = self.criterion.state_dict()
+
         last_path = self.checkpoint_dir / "last.pt"
         torch.save(payload, last_path)
 
@@ -628,9 +645,10 @@ def run_triplet_epoch(
     optimizer: Optimizer,
     device: torch.device,
     *,
-    mining_margin: float = 0.2,
+    margin: float = 0.2,
     normalize_embeddings: bool = False,
     mining_strategy: str = "hard",
+    margin_type: str = "soft",
     amp_enabled: bool = False,
     grad_clip_max_norm: Optional[float] = None,
     log_every_steps: int = 50,
@@ -657,9 +675,10 @@ def run_triplet_epoch(
             loss, stats = batch_hard_triplet_loss(
                 embeddings,
                 labels,
-                mining_margin=mining_margin,
+                margin=margin,
                 normalize_embeddings=normalize_embeddings,
                 mining_strategy=mining_strategy,
+                margin_type=margin_type,
             )
 
         scaler.scale(loss).backward()
@@ -708,7 +727,7 @@ def train_triplet_learning(
     optimizer: Optimizer,
     scheduler: Optional[Any] = None,
     device: str | torch.device = "auto",
-    mining_margin: float = 0.2,
+    margin: float = 0.2,
     normalize_embeddings: bool = False,
     mining_phase1_strategy: str = "easy_semi_hard",
     mining_phase2_strategy: str = "hard",
@@ -716,6 +735,7 @@ def train_triplet_learning(
     mining_phase1_epochs: int = 0,
     mining_phase2_epochs: int = 0,
     mining_warmup_epochs: int = 0,
+    margin_type: str = "soft",
     amp_enabled: bool = False,
     grad_clip_max_norm: Optional[float] = None,
     log_every_steps: int = 50,
@@ -802,9 +822,10 @@ def train_triplet_learning(
             dataloader=train_loader,
             optimizer=optimizer,
             device=resolved_device,
-            mining_margin=mining_margin,
+            margin=margin,
             normalize_embeddings=normalize_embeddings,
             mining_strategy=mining_strategy,
+            margin_type=margin_type,
             amp_enabled=amp_enabled,
             grad_clip_max_norm=grad_clip_max_norm,
             log_every_steps=log_every_steps,

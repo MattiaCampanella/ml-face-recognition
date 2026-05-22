@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from src.datasets.face_dataset import CasiaFaceDataset, build_train_label_mapping
 from src.datasets.loaders import PKBatchSampler
+from src.models.losses import ArcFaceLoss
 from src.models.resnet18 import build_baseline_resnet18
 from src.training.trainer import EarlyStoppingConfig, train_supervised, train_triplet_learning
 from src.utils.config import ensure_dir, load_yaml_config, make_run_name, resolve_repo_path, save_json
@@ -20,16 +21,26 @@ def _parse_args() -> argparse.Namespace:
 	return parser.parse_args()
 
 
-def _build_optimizer(model: torch.nn.Module, config: dict) -> torch.optim.Optimizer:
+def _build_optimizer(
+	model: torch.nn.Module,
+	config: dict,
+	extra_params: list[dict] | None = None,
+) -> torch.optim.Optimizer:
 	optimizer_cfg = config["train"]["optimizer"]
 	name = optimizer_cfg.get("name", "adamw").lower()
 	lr = float(optimizer_cfg.get("lr", 3e-4))
 	weight_decay = float(optimizer_cfg.get("weight_decay", 1e-4))
 
+	# Merge model params with any extra param-groups (e.g. ArcFaceLoss.W).
+	params: list = list(model.parameters())
+	if extra_params:
+		for ep in extra_params:
+			params.extend(ep if isinstance(ep, (list, tuple)) else [ep])
+
 	if name == "adamw":
-		return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+		return torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
 	if name == "adam":
-		return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+		return torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
 	raise ValueError(f"Unsupported optimizer: {name}")
 
 
@@ -144,8 +155,12 @@ def main() -> None:
 	classifier_cfg = model_cfg.get("classifier_head", {})
 	num_classes = int(classifier_cfg.get("num_classes") or len(train_label_mapping))
 	classifier_enabled = bool(classifier_cfg.get("enabled", True))
-	if loss_name == "triplet":
+	if loss_name in {"triplet", "arcface"}:
 		classifier_enabled = False
+	if loss_name == "arcface":
+		# ArcFace requires L2-normalised embeddings on the unit sphere.
+		model_cfg["normalize_embeddings"] = True
+		print("[train] ArcFace detected — forcing model.normalize_embeddings=True.")
 
 	print("[train] Building model.")
 	model = build_baseline_resnet18(
@@ -160,7 +175,31 @@ def main() -> None:
 		# model = torch.compile(model)
 
 	print("[train] Building optimizer/scheduler.")
-	optimizer = _build_optimizer(model, config)
+	arcface_criterion: ArcFaceLoss | None = None
+	if loss_name == "arcface":
+		arcface_s = float(loss_cfg.get("params", {}).get("s", 30.0))
+		arcface_m = float(loss_cfg.get("params", {}).get("m", 0.5))
+		arcface_k = int(loss_cfg.get("params", {}).get("k", 1))
+		arcface_easy_margin = bool(loss_cfg.get("params", {}).get("easy_margin", False))
+		embedding_dim = int(model_cfg.get("embedding_dim", 512))
+		arcface_criterion = ArcFaceLoss(
+			num_classes=num_classes,
+			embedding_dim=embedding_dim,
+			s=arcface_s,
+			m=arcface_m,
+			k=arcface_k,
+			easy_margin=arcface_easy_margin,
+		)
+		print(
+			f"[train] ArcFaceLoss: num_classes={num_classes} embedding_dim={embedding_dim} "
+			f"s={arcface_s} m={arcface_m:.4f} k={arcface_k} easy_margin={arcface_easy_margin}"
+		)
+		optimizer = _build_optimizer(
+			model, config,
+			extra_params=list(arcface_criterion.parameters()),
+		)
+	else:
+		optimizer = _build_optimizer(model, config)
 	scheduler = _build_scheduler(optimizer, config)
 	output_cfg = config.get("output", {})
 	run_root = ensure_dir(output_cfg.get("root_dir", "experiments/runs"))
@@ -205,7 +244,7 @@ def main() -> None:
 		sampler_cfg = config["train"].get("sampler", {})
 		p = int(sampler_cfg.get("p", 16))
 		k = int(sampler_cfg.get("k", 4))
-		mining_margin = float(triplet_cfg.get("mining_margin", 0.2))
+		margin = float(triplet_cfg.get("margin", 0.2))
 		mining_curriculum_cfg = triplet_cfg.get("mining_curriculum", {})
 		mining_phase1 = str(mining_curriculum_cfg.get("phase1", "easy_semi_hard"))
 		mining_phase2 = str(mining_curriculum_cfg.get("phase2", "semi_hard"))
@@ -216,6 +255,7 @@ def main() -> None:
 		)
 		mining_phase2_epochs = int(mining_curriculum_cfg.get("phase2_epochs", 0))
 		mining_warmup_epochs = mining_phase1_epochs
+		margin_type = str(triplet_cfg.get("margin_type", "soft"))
 		batch_sampler = PKBatchSampler(
 			labels=[sample.label for sample in train_dataset.samples],
 			p=p,
@@ -239,7 +279,7 @@ def main() -> None:
 			optimizer=optimizer,
 			scheduler=scheduler,
 			device=device,
-			mining_margin=mining_margin,
+			margin=margin,
 			normalize_embeddings=bool(triplet_cfg.get("normalize_embeddings", False)),
 			mining_phase1_strategy=mining_phase1,
 			mining_phase2_strategy=mining_phase2,
@@ -247,6 +287,7 @@ def main() -> None:
 			mining_phase1_epochs=mining_phase1_epochs,
 			mining_phase2_epochs=mining_phase2_epochs,
 			mining_warmup_epochs=mining_warmup_epochs,
+			margin_type=margin_type,
 			amp_enabled=amp_enabled,
 			grad_clip_max_norm=grad_clip_max_norm,
 			log_every_steps=log_every_steps,
@@ -269,7 +310,14 @@ def main() -> None:
 			pin_memory=bool(seed_cfg.get("pin_memory", True)),
 			persistent_workers=(int(seed_cfg.get("num_workers", 4)) > 0),
 		)
-		print("[train] Starting supervised training loop.")
+		criterion = arcface_criterion if arcface_criterion is not None else torch.nn.CrossEntropyLoss()
+		if arcface_criterion is not None:
+			# Move ArcFaceLoss to same device as model before training starts.
+			device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "auto" else torch.device(device)
+			arcface_criterion.to(device_obj)
+			print("[train] Starting ArcFace supervised training loop.")
+		else:
+			print("[train] Starting supervised training loop.")
 		history = train_supervised(
 			model=model,
 			train_loader=train_loader,
@@ -277,7 +325,7 @@ def main() -> None:
 			epochs=epochs,
 			optimizer=optimizer,
 			scheduler=scheduler,
-			criterion=torch.nn.CrossEntropyLoss(),
+			criterion=criterion,
 			device=device,
 			amp_enabled=amp_enabled,
 			grad_clip_max_norm=grad_clip_max_norm,
