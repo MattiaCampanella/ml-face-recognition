@@ -300,19 +300,24 @@ st.write("Upload images with a single cropped face per file. The app clusters th
 
 with st.sidebar:
     st.header("Settings")
-    device_choice = st.selectbox("Device", options=["auto", "cuda", "cpu"], index=0)
     algorithm = st.selectbox("Algorithm", options=["DBSCAN", "Agglomerative"], index=0)
     batch_size = st.slider("Batch size", min_value=1, max_value=128, value=32, step=1)
 
-    st.markdown("---")
-    st.subheader("DBSCAN")
-    dbscan_eps = st.slider("eps", min_value=0.05, max_value=1.0, value=0.25, step=0.01)
-    dbscan_min_samples = st.slider("min_samples", min_value=1, max_value=10, value=2, step=1)
+    st.info("Are the results looking off? Try adjusting the **neighborhood radius** or the **merge distance threshold**.")
 
     st.markdown("---")
-    st.subheader("Agglomerative")
-    agg_threshold = st.slider("distance_threshold", min_value=0.05, max_value=1.0, value=0.25, step=0.01)
-    agg_linkage = st.selectbox("linkage", options=["average", "complete", "single"], index=0)
+    if algorithm == "DBSCAN":
+        st.subheader("DBSCAN")
+        dbscan_eps = st.slider("Neighborhood radius", min_value=0.05, max_value=1.0, value=0.25, step=0.01)
+        dbscan_min_samples = st.slider("Minimum images per identity", min_value=1, max_value=10, value=2, step=1)
+        agg_threshold = None
+        agg_linkage = None
+    else:
+        st.subheader("Agglomerative")
+        agg_threshold = st.slider("Merge distance threshold", min_value=0.05, max_value=1.0, value=0.25, step=0.01)
+        agg_linkage = st.selectbox("linkage", options=["average", "complete", "single"], index=0)
+        dbscan_eps = None
+        dbscan_min_samples = None
 
 uploaded_files = st.file_uploader(
     "Upload images",
@@ -322,6 +327,23 @@ uploaded_files = st.file_uploader(
 
 if not uploaded_files:
     st.info("Upload at least one image to start.")
+
+    examples_dir = DEMO_DIR / "examples"
+    correct_path = examples_dir / "correct.jpg"
+    incorrect_path = examples_dir / "incorrect.jpg"
+    group_path = examples_dir / "group.jpg"
+
+    col1, col2, col3, col4 = st.columns(4)
+    if correct_path.exists():
+        with col1:
+            st.image(str(correct_path), caption="Correctly cropped ✅", width=240)
+    if incorrect_path.exists():
+        with col2:
+            st.image(str(incorrect_path), caption="Incorrect crop ❌", width=240)
+    if group_path.exists():
+        with col3:
+            st.image(str(group_path), caption="Avoid group pictures ❌", width=240)
+
     st.stop()
 
 items, previews, errors = parse_uploads(uploaded_files)
@@ -337,9 +359,7 @@ if not items:
 run = st.button("Run clustering", type="primary")
 
 if run:
-    resolved_device = resolve_device(device_choice)
-    if device_choice == "cuda" and resolved_device == "cpu":
-        st.warning("CUDA not available. Using CPU.")
+    resolved_device = resolve_device("auto")
 
     _model, cfg, missing_keys, unexpected_keys = load_model(resolved_device)
     model_cfg = cfg.get("model", {})
@@ -380,10 +400,10 @@ if run:
         labels = cluster_embeddings(
             embeddings,
             method=method,
-            dbscan_eps=dbscan_eps,
-            dbscan_min_samples=dbscan_min_samples,
-            agg_threshold=agg_threshold,
-            agg_linkage=agg_linkage,
+            dbscan_eps=dbscan_eps if dbscan_eps is not None else 0.25,
+            dbscan_min_samples=dbscan_min_samples if dbscan_min_samples is not None else 2,
+            agg_threshold=agg_threshold if agg_threshold is not None else 0.25,
+            agg_linkage=agg_linkage if agg_linkage is not None else "average",
         )
 
     if labels.size == 0:
