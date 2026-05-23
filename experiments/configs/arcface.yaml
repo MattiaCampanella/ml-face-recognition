@@ -70,8 +70,8 @@ loss:
     easy_margin: false
 
 train:
-  epochs: 30
-  batch_size: 64
+  epochs: 60
+  batch_size: 512
   eval_every: 1
   log_every_steps: 100
   optimizer:
@@ -81,7 +81,7 @@ train:
   scheduler:
     name: cosine
     params:
-      t_max: 30
+      t_max: 60
       min_lr: 0.000001
   early_stopping:
     enabled: false

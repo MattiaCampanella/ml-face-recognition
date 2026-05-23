@@ -9,7 +9,6 @@
 | 2026-05-15      | PK(32, 4) | 512       | 0.1 softmargin | .87   | .81  | .77   | 0.0003        | hard        | only loss norm⬆️
 | 2026-05-16      | PK(42, 4) | 512       | 0.1 softmargin | .86   | .80  | .75   | 0.0003        | hard        | 🌕
 | 2026-05-15      | PK(32, 4) | 512       | 0.1 hingemargin| .25   | .16  | .12   | 0.0003        | hard        | 🤢
-| > ?          up batch size  
 
 \* Overfitting observed
 

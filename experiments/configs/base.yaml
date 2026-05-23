@@ -56,7 +56,7 @@ loss:
   params: {}
 
 train:
-  epochs: 100
+  epochs: 30
   batch_size: 512
   eval_every: 1
   log_every_steps: 100
