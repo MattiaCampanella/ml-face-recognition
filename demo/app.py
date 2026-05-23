@@ -316,6 +316,7 @@ with st.sidebar:
         st.subheader("Agglomerative")
         agg_threshold = st.slider("Merge distance threshold", min_value=0.05, max_value=1.0, value=0.25, step=0.01)
         agg_linkage = st.selectbox("linkage", options=["average", "complete", "single"], index=0)
+        st.caption("Tip: start with `average`. Use `complete` for tighter clusters, and `single` only if you want looser chaining.")
         dbscan_eps = None
         dbscan_min_samples = None
 

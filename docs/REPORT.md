@@ -35,9 +35,9 @@ I log di training su cluster e il testing metrico certificano in maniera lampant
 
 | Model Variante | Tuning Chiave | mAP@1 | mAP@5 | mAP@10 |
 | :--- | :--- | :---: | :---: | :---: |
-| **Baseline** (100 Epoche) | Classificazione Standard | ~52.1% | ~40.3% | ~34.2% |
-| **Triplet Loss** | Softmargin, Hard-mining, PK(32,4) |  ~87.0% | ~81.0% | ~77.0% |
-| **ArcFace** (30 Epoche) | - | ~82.1% | ~74.6% | ~69.0% |
+| **Baseline** | Classificazione Standard | ~63.0% | ~50.7% | ~44.1% |
+| **Triplet Loss** | Softmargin, Hard-mining, PK(32,4) |  **~87.0%** | **~81.0%** | **~77.0%** |
+| **ArcFace** | - | ~82.1% | ~74.6% | ~69.0% |
 
 **Discussione**: 
 Il punto decisivo non è il valore del *margin* in sé, ma la formulazione della triplet loss e la strategia di mining. La versione *hinge* introduce un margine esplicito e, quando combinata con hard mining, può diventare molto sensibile al label noise e far collassare il modello, perché spinge con forza i casi più difficili, inclusi quelli potenzialmente rumorosi. La versione *soft*, invece, usa una penalizzazione continua tramite `softplus` sul gap tra hard positive e hard negative e non dipende da un parametro numerico di margine; per questo è più corretto descriverla come una loss più morbida e stabile, non come un `softmargin` a 0.1. In questo setting il modello triplet raggiunge comunque circa **~87% mAP@1**, restando competitivo rispetto alla branch **ArcFace** (~82%).
@@ -66,7 +66,7 @@ Per isolare l'effetto delle principali scelte progettuali, sono stati confrontat
 | 2026-05-14 | PK(32, 4) | 512 | Softmargin | easy to semi | .72 | .62 | .56 |
 | 2026-05-15 | PK(32, 4) | 512 | Softmargin | hard | .86 | .80 | .75 |
 | 2026-05-15 | PK(32, 4) | 512 | Softmargin | semi to hard | .82 | .74 | .69 |
-| 2026-05-15 | PK(32, 4) | 512 | Softmargin | hard | .87 | .81 | .77 |
+| 2026-05-15 | PK(32, 4) | 512 | Softmargin | hard | **.87** | **.81** | **.77** |
 | 2026-05-16 | PK(42, 4) | 512 | Softmargin | hard | .86 | .80 | .75 |
 | 2026-05-15 | PK(32, 4) | 512 | Hingemargin | hard | .25 | .16 | .12 |
 
