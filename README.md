@@ -10,13 +10,14 @@
 - **Project ID**: 1
 
 ## 📝 Project Description
-A brief paragraph (3-4 lines) that visually and concisely describes the project, the main implemented model, and the task addressed. 
-*(Imagine this is the technical Abstract of your GitHub repo).*
+This project investigates metric learning for face recognition on CASIA-WebFace, focusing on identity retrieval and latent-space clustering.
+We train a ResNet-18 backbone to produce L2-normalized embeddings and optimize them with triplet loss, PK sampling, and online mining.
+Compared with a standard classification baseline, the learned representation yields more compact identities and stronger retrieval performance.
 
 > 📖 **Official Report**: For all theoretical details, performance analysis, the architecture used, and group contributions, please refer to our formal paper: **[REPORT.md](docs/REPORT.md)**.
 
 ## Project Demo
-A demo webapp showcasing identity grouping on uploaded face crops is available in `demo/app.py`.
+A demo webapp showcasing identity grouping on uploaded face crops is available in italian in `demo/app.py`.
 Run it locally with:
 
 ```bash
@@ -25,7 +26,7 @@ conda activate streamlit-env
 streamlit run demo/app.py
 ```
 
-The first version assumes the uploaded images are already cropped around a single face.
+This first version assumes the uploaded images are already cropped around a single face.
 
 ## 🛠 Technical Reproducibility
 

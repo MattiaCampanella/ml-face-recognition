@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "project": {
+    "name": "ml-face-recognition",
+    "task": "face-metric-learning",
+    "experiment": "triplet-hardmining",
+    "notes": "Triplet loss with batch-hard mining and PK sampling."
+  },
+  "output": {
+    "root_dir": "experiments/runs",
+    "run_name": "auto",
+    "naming": {
+      "use_timestamp": true,
+      "include_experiment": true
+    },
+    "dirs": {
+      "logs": "logs",
+      "checkpoints": "checkpoints",
+      "metrics": "metrics",
+      "artifacts": "artifacts"
+    },
+    "save_resolved_config": true
+  },
+  "system": {
+    "seed": 42,
+    "deterministic": false,
+    "benchmark": true,
+    "device": "auto",
+    "num_workers": 8,
+    "pin_memory": true,
+    "amp": true
+  },
+  "data": {
+    "dataset_name": "casia-webface",
+    "root_dir": "data/casia-webface",
+    "split_file": "data/splits/casia_identity_split_v1.json",
+    "auto_download": false,
+    "download_source": "kaggle",
+    "dataset_ref": "debarghamitraroy/casia-webface",
+    "image_size": 224,
+    "channels": 3,
+    "debug_subset": {
+      "enabled": false,
+      "max_identities": null,
+      "max_images_per_identity": null
+    }
+  },
+  "model": {
+    "backbone": "resnet18",
+    "pretrained": true,
+    "embedding_dim": 512,
+    "normalize_embeddings": true,
+    "classifier_head": {
+      "enabled": false,
+      "num_classes": null
+    }
+  },
+  "loss": {
+    "name": "triplet",
+    "params": {
+      "mining_margin": 0.1,
+      "normalize_embeddings": false,
+      "mining_curriculum": {
+        "phase1": "hard",
+        "phase2": "hard",
+        "phase3": "hard",
+        "phase1_epochs": 20,
+        "phase2_epochs": 20
+      }
+    }
+  },
+  "train": {
+    "epochs": 30,
+    "batch_size": 512,
+    "eval_every": 1,
+    "log_every_steps": 100,
+    "sampler": {
+      "p": 32,
+      "k": 4,
+      "shuffle": true,
+      "drop_last": true
+    },
+    "optimizer": {
+      "name": "adamw",
+      "lr": 0.0003,
+      "weight_decay": 0.01
+    },
+    "scheduler": {
+      "name": "cosine",
+      "params": {
+        "t_max": 30,
+        "min_lr": 1e-06
+      }
+    },
+    "early_stopping": {
+      "enabled": true,
+      "patience": 10,
+      "min_delta": 0.001,
+      "min_epochs": 10
+    },
+    "grad_clip": {
+      "enabled": true,
+      "max_norm": 5.0
+    }
+  },
+  "retrieval_eval": {
+    "enabled": true,
+    "distance": "cosine",
+    "l2_normalize": true,
+    "topk": [
+      1,
+      5,
+      10
+    ],
+    "batch_size": 128
+  },
+  "logging": {
+    "level": "INFO",
+    "tensorboard": {
+      "enabled": true,
+      "subdir": "tb"
+    },
+    "json_metrics": true
+  },
+  "checkpoint": {
+    "resume_from": null,
+    "save_last": true,
+    "save_best": true,
+    "save_every_n_epochs": 5,
+    "monitor": "val_map_at_5",
+    "mode": "max"
+  }
+}
