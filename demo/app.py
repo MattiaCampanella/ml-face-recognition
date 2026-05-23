@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import zipfile
 from dataclasses import dataclass
+from urllib.error import URLError
+from urllib.request import urlopen
 from pathlib import Path
 import sys
 from typing import Iterable
@@ -27,6 +30,11 @@ from src.models.resnet18 import build_baseline_resnet18
 
 CONFIG_PATH = DEMO_DIR / "resolved_config.json"
 CHECKPOINT_PATH = DEMO_DIR / "best.pt"
+CHECKPOINT_REPO_ID = os.environ.get("DEMO_MODEL_REPO_ID", "C0MPLX/triplet")
+CHECKPOINT_FILENAME = os.environ.get("DEMO_MODEL_FILENAME", "best.pt")
+CHECKPOINT_URL = (
+    f"https://huggingface.co/{CHECKPOINT_REPO_ID}/resolve/main/{CHECKPOINT_FILENAME}?download=1"
+)
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -75,6 +83,23 @@ def build_transform(image_size: int) -> transforms.Compose:
     )
 
 
+def ensure_checkpoint() -> Path:
+    if CHECKPOINT_PATH.exists():
+        return CHECKPOINT_PATH
+
+    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with urlopen(CHECKPOINT_URL) as response, CHECKPOINT_PATH.open("wb") as target:
+            target.write(response.read())
+    except URLError as exc:
+        raise FileNotFoundError(
+            "Missing demo checkpoint and automatic download failed. "
+            f"Expected {CHECKPOINT_PATH} or a reachable model at {CHECKPOINT_URL}"
+        ) from exc
+
+    return CHECKPOINT_PATH
+
+
 @st.cache_resource(show_spinner=False)
 def load_model(device_str: str) -> tuple[torch.nn.Module, dict, list[str], list[str]]:
     cfg = load_demo_config()
@@ -90,7 +115,7 @@ def load_model(device_str: str) -> tuple[torch.nn.Module, dict, list[str], list[
     device = torch.device(device_str)
     model = model.to(device)
 
-    checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
+    checkpoint = torch.load(ensure_checkpoint(), map_location=device)
     state_dict = checkpoint.get("model_state_dict", checkpoint)
     state_dict = normalize_state_dict_keys(state_dict)
     incompatible = model.load_state_dict(state_dict, strict=False)
