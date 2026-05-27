@@ -54,6 +54,21 @@ class ModelService:
         downloaded_path = Path(downloaded)
         if downloaded_path != model_path:
             downloaded_path.rename(model_path)
+            
+        # Try to download the external data file as well (.data)
+        try:
+            downloaded_data = hf_hub_download(
+                repo_id=settings.model_repo_id,
+                filename=f"{settings.model_filename}.data",
+                local_dir=str(model_path.parent),
+                local_dir_use_symlinks=False,
+            )
+            data_path = Path(downloaded_data)
+            expected_data_path = Path(f"{str(model_path)}.data")
+            if data_path != expected_data_path:
+                data_path.rename(expected_data_path)
+        except Exception:
+            logger.info("No external data file (.data) found, skipping.")
 
         logger.info("Model downloaded to %s", model_path)
         return model_path
