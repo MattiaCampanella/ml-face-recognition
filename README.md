@@ -2,7 +2,7 @@
 
 # Metric Learning for Face Recognition
 
-[![Demo](https://img.shields.io/badge/Demo-Streamlit-green)](https://clusteringdemo.streamlit.app)
+[![Demo](https://img.shields.io/badge/Demo-Streamlit-green)](https://clusteringdemo.vercel.app)
 [![Report](https://img.shields.io/badge/Paper-REPORT.md-blue)](docs/REPORT.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -18,7 +18,7 @@ Compared with a standard classification baseline, the learned representation yie
 > 📖 **Official Report**: For all theoretical details, performance analysis, the architecture used, and group contributions, please refer to our formal paper: **[REPORT.md](docs/REPORT.md)**.
 
 ## Project Demo
-A demo webapp showcasing identity grouping on uploaded face crops is available online at [clusteringdemo.streamlit.app](https://clusteringdemo.streamlit.app);
+A demo webapp showcasing identity grouping on uploaded face crops is available online at [clusteringdemo.vercel.app](https://clusteringdemo.vercel.app);
 or locally at `demo/app.py`.
 The app expects a local `demo/best.pt`, but if the file is missing it will download it automatically from the Hugging Face model repo `C0MPLX/triplet`.
 Run it locally with:
