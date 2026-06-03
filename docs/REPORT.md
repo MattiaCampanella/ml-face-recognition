@@ -7,11 +7,11 @@
 
 ## 1. Introduction and Objective
 
-Il riconoscimento facciale rappresenta una sfida complessa in computer vision, specialmente per l'identificazione di soggetti con ampie variazioni di illuminazione, posa o espressione. L'obiettivo principale di questo progetto è implementare e valutare architetture di **Metric Learning** capaci di generalizzare su volti e identità mai viste durante l'addestramento. Per farlo, hocostruito una pipeline flessibile progettata per estrarre embedding distintivi, misurandone la qualità tramite un task di Retrieval su un set con identità mutuamente esclusive.
+Il riconoscimento facciale rappresenta una sfida complessa in computer vision, specialmente per l'identificazione di soggetti con ampie variazioni di illuminazione, posa o espressione. L'obiettivo principale di questo progetto è implementare e valutare architetture di **Metric Learning** capaci di generalizzare su volti e identità mai viste durante l'addestramento. Per farlo, ho costruito una pipeline flessibile progettata per estrarre embedding distintivi, misurandone la qualità tramite un task di Retrieval su un set con identità mutuamente esclusive.
 
 ## 2. Contribution and Added Value
 
-ho costruito un sistema di face recognition basato su **ResNet-18** per apprendere embedding capaci di generalizzare su identità non viste. Rispetto a un classico baseline classificativo, il contributo principale è una pipeline di metric learning pensata per migliorare retrieval e clustering nello spazio latente.
+Ho costruito un sistema di face recognition basato su **ResNet-18** per apprendere embedding capaci di generalizzare su identità non viste. Rispetto a un classico baseline classificativo, il contributo principale è una pipeline di metric learning pensata per migliorare retrieval e clustering nello spazio latente.
 
 Il valore aggiunto rispetto al semplice riuso di codice esistente è dato da:
 
@@ -86,8 +86,9 @@ Per isolare l'effetto delle principali scelte progettuali, sono stati confrontat
 | 2026-05-15 | PK(32, 4) |    512    | Softmargin  | hard         | **.87** | **.81** | **.77** |
 | 2026-05-16 | PK(42, 4) |    512    | Softmargin  | hard         |      .86      |      .80      |      .75      |
 | 2026-05-16 | PK(32, 4) |    512    | Hingemargin | hard         |      .25      |      .16      |      .12      |
+| 2026-05-30 | PK(32, 4) |    512    | Hingemargin | semi-hard    |      .82      |      .75      |      .69      |
 
-I risultati mostrano tre segnali principali. Primo: la combinazione di hard mining con la loss soft ha prodotto i valori migliori, mentre la variante hinge con hard mining degrada in modo netto. Secondo: il salto di qualità non dipende da un singolo parametro isolato, ma dall’interazione tra sampler PK, strategia di mining e formulazione della loss; in particolare, configurazioni con batch effettivo più piccolo di 32×4 hanno mostrato maggiore tendenza all’overfitting. Terzo: la configurazione con PK(32,4), embedding da 512 e loss soft rappresenta il compromesso più solido del ciclo sperimentale, con un leggero vantaggio quando la normalizzazione viene applicata solo nella loss e non direttamente agli embedding del modello, portando le prestazioni circa da 86% a 87%.
+I risultati mostrano tre segnali principali. Primo: la combinazione di hard mining con la loss soft ha prodotto i valori migliori, mentre la variante hinge con hard mining crolla in modo netto (.25 mAP@1) — un collasso attribuibile alla sensibilità al label noise del dataset. Il nuovo run hinge con semi-hard mining (2026-05-30) chiarisce però che il problema non è la formulazione hinge in sé: abbassando l'aggressività del mining, la hinge recupera fino a .82 mAP@1, un risultato competitivo. Il confronto a parità di mining (semi-hard) mostra quindi un vantaggio contenuto della soft sulla hinge (~5 p.p. di mAP@1 tra i rispettivi best), mentre il vero fattore discriminante rimane la strategia di mining: hard mining amplifica i benefici della soft ma risulta letale per la hinge in presenza di rumore. Secondo: il salto di qualità non dipende da un singolo parametro isolato, ma dall'interazione tra sampler PK, strategia di mining e formulazione della loss; configurazioni con batch effettivo più piccolo di 32×4 hanno mostrato maggiore tendenza all'overfitting. Terzo: la configurazione con PK(32,4), embedding da 512 e loss soft rimane il compromesso più solido del ciclo sperimentale, con un leggero vantaggio quando la normalizzazione viene applicata solo nella loss e non direttamente agli embedding del modello, portando le prestazioni circa da 86% a 87%.
 
 ## 6. Conclusion and Limitations
 
@@ -108,6 +109,5 @@ Le scelte metodologiche principali sono state guidate dalla lettura dei material
 
 - _FaceNet: A Unified Embedding for Face Recognition and Clustering_
 - _ArcFace: Additive Angular Margin Loss for Deep Face Recognition_
-- *Hard-Mining Loss based Convolutional Neural Network for Face Recognition*
 - _Anti-Noise Face: A Resilient Model for Face Recognition with Labeled Noise Data_
 - _In Defense of the Triplet Loss for Person Re-Identification_

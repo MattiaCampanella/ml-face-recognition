@@ -3,8 +3,8 @@ version: 1
 project:
   name: ml-face-recognition
   task: face-metric-learning
-  experiment: triplet-hardmining
-  notes: "Triplet loss with batch-hard mining and PK sampling."
+  experiment: triplet-semihard
+  notes: "Triplet loss with hinge margin 0.2 and semi-hard mining."
 
 output:
   root_dir: experiments/runs
@@ -54,13 +54,13 @@ model:
 loss:
   name: triplet
   params:
-    margin: 0.1
+    margin: 0.2
     normalize_embeddings: false
     margin_type: hinge  # soft (softplus, no explicit margin) | hinge (relu + margin)
     mining_curriculum: # easy_semi_hard, semi_hard, hard
-      phase1: hard
-      phase2: hard
-      phase3: hard
+      phase1: semi_hard
+      phase2: semi_hard
+      phase3: semi_hard
       phase1_epochs: 100
       phase2_epochs: 100 # + phase1_epochs
 
