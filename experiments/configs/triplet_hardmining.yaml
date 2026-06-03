@@ -55,7 +55,7 @@ loss:
   name: triplet
   params:
     margin: 0.2
-    normalize_embeddings: false
+    normalize_embeddings: true
     margin_type: hinge  # soft (softplus, no explicit margin) | hinge (relu + margin)
     mining_curriculum: # easy_semi_hard, semi_hard, hard
       phase1: semi_hard
