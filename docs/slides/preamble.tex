@@ -1,0 +1,133 @@
+% =============================================================
+% preamble.tex – G25 Metric Learning for Face Recognition
+% Deep Learning: Advanced Models and Methods (DL26)
+% =============================================================
+
+% ---- Encoding & Language ----
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[italian]{babel}
+
+% ---- Font ----
+\usepackage{lmodern}
+\renewcommand{\familydefault}{\sfdefault}
+
+% ---- Mathematics ----
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% ---- Graphics ----
+\usepackage{graphicx}
+\graphicspath{{../../figures/}}
+
+% ---- Color ----
+\usepackage{xcolor}
+
+\definecolor{colPrimary}{HTML}{1B3A5C}      % Deep Navy
+\definecolor{colAccent}{HTML}{2E86AB}       % Steel Teal
+\definecolor{colHighlight}{HTML}{E8832A}    % Warm Orange
+\definecolor{colBg}{HTML}{F4F7FA}           % Light Gray
+\definecolor{colText}{HTML}{3A3A4A}         % Dark Slate
+\definecolor{colGreen}{HTML}{27AE60}        % Success Green
+\definecolor{colRed}{HTML}{C0392B}          % Alert Red
+
+% ---- TikZ ----
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc, decorations.pathreplacing}
+
+% ---- Tables ----
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{colortbl}
+
+% ---- Misc ----
+\usepackage{microtype}
+
+% ================================================================
+% BEAMER THEME
+% ================================================================
+
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+
+% -- Structure --
+\setbeamercolor{structure}{fg=colPrimary}
+\setbeamercolor{frametitle}{bg=colPrimary, fg=white}
+\setbeamercolor{normal text}{fg=colText, bg=white}
+\setbeamercolor{alerted text}{fg=colHighlight}
+\setbeamercolor{example text}{fg=colGreen}
+
+% -- Blocks --
+\setbeamercolor{block title}{bg=colAccent, fg=white}
+\setbeamercolor{block body}{bg=colAccent!11!white, fg=colText}
+\setbeamercolor{block title alerted}{bg=colHighlight, fg=white}
+\setbeamercolor{block body alerted}{bg=colHighlight!11!white, fg=colText}
+\setbeamercolor{block title example}{bg=colGreen!80!black, fg=white}
+\setbeamercolor{block body example}{bg=colGreen!10!white, fg=colText}
+
+% -- Head/foot (used in footer) --
+\setbeamercolor{author in head/foot}{bg=colPrimary!88!black, fg=white!78!colPrimary}
+\setbeamercolor{date in head/foot}{bg=colPrimary!92!black, fg=white}
+
+% -- Fonts --
+\setbeamerfont{frametitle}{size=\large, series=\bfseries}
+\setbeamerfont{block title}{size=\small, series=\bfseries}
+\setbeamerfont{itemize/enumerate body}{size=\small}
+\setbeamerfont{itemize/enumerate subbody}{size=\footnotesize}
+
+% -- Bullets --
+\setbeamertemplate{itemize item}{%
+    \color{colAccent}\raisebox{0.05em}{$\blacktriangleright$}\hspace{0.1em}}
+\setbeamertemplate{itemize subitem}{%
+    \color{colAccent!70!colText}\textbullet\hspace{0.1em}}
+\setbeamertemplate{enumerate item}{%
+    \color{colAccent}\bfseries\insertenumlabel.\hspace{0.2em}}
+
+% -- Frame title --
+\setbeamertemplate{frametitle}{%
+    \begin{beamercolorbox}[wd=\paperwidth, ht=0.62cm, dp=0.14cm, leftskip=0.45cm]{frametitle}%
+        \usebeamerfont{frametitle}\strut\insertframetitle%
+    \end{beamercolorbox}%
+}
+
+% -- Footer --
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace
+            Metric Learning for Face Recognition\enspace$\cdot$\enspace DL26
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny \insertframenumber\,/\,\inserttotalframenumber
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% CUSTOM COMMANDS
+% ================================================================
+\newcommand{\good}[1]{{\color{colGreen}\textbf{#1}}}
+\newcommand{\bad}[1]{{\color{colRed}\textbf{#1}}}
+\newcommand{\warn}[1]{{\color{colHighlight}\textbf{#1}}}
+\newcommand{\emphc}[1]{{\color{colPrimary}\textbf{#1}}}
+\newcommand{\repo}{\texttt{github.com/MattiaCampanella/ml-face-recognition}}
+
+% ================================================================
+% TIKZ STYLES
+% ================================================================
+\tikzset{
+    mybox/.style={
+        draw=#1, fill=#1!13!white,
+        rounded corners=3pt,
+        minimum height=0.68cm,
+        align=center,
+        font=\scriptsize
+    },
+    mybox/.default=colAccent,
+    myarrow/.style={-Stealth, thick, color=colText!55!white},
+}
