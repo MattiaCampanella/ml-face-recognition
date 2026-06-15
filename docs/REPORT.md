@@ -41,14 +41,19 @@ I log di training su cluster e la valutazione metrica confermano il vantaggio de
 
 **Tabella 1**: Valutazioni di Retrieval (mAP Index)
 
-| Model Variante         | Tuning Chiave                     |      mAP@1      |      mAP@5      |      mAP@10      |
-| :--------------------- | :-------------------------------- | :--------------: | :--------------: | :--------------: |
-| **Baseline**     | Classificazione Standard          |      ~63.0%      |      ~50.7%      |      ~44.1%      |
-| **Triplet Loss** | Softmargin, Hard-mining, PK(32,4) | **~87.0%** | **~81.0%** | **~77.0%** |
-| **ArcFace**      | -                                 |      ~82.1%      |      ~74.6%      |      ~69.0%      |
+| Modello | Caratteristiche principali | mAP@1 | mAP@5 | mAP@10 |
+| :--- | :--- | :---: | :---: | :---: |
+| **Baseline** | Classificazione Standard | ~63.0% | ~50.7% | ~44.1% |
+| **Triplet (Naive)** | Hingemargin ($m=0.2$), Semi-hard, PK(32,4) | ~78.0% | ~69.0% | ~64.0% |
+| **Triplet (Engineered)** | Softmargin, Hard-mining, PK(32,4) | **~87.0%** | **~81.0%** | **~77.0%** |
+| **ArcFace (Naive)** | Sub-center ($k=3$), $s=64.0$, $m=0.5$ | ~83.9% | ~77.1% | ~71.8% |
 
 **Discussione**:
-Il punto decisivo non è il valore del *margin* in sé, ma la formulazione della triplet loss e la strategia di mining. La versione *hinge* introduce un margine esplicito e, quando combinata con hard mining, può diventare molto sensibile al label noise e far collassare il modello, perché spinge con forza i casi più difficili, inclusi quelli potenzialmente rumorosi. Come si evince dal run con hinge margin usando semi-hard mining, si ottiene una convergenza stabile e prestazioni competitive, ma comunque inferiori rispetto al softmargin. La versione *soft*, invece, usa una penalizzazione continua tramite `softplus` sul gap tra hard positive e hard negative e non dipende da un parametro numerico di margine; per questo è più corretto descriverla come una loss più morbida e stabile. In questo setting il modello triplet raggiunge comunque circa **~87% mAP@1**, restando competitivo rispetto alla variante **ArcFace** (~82%).
+Il confronto evidenzia l'impatto critico delle scelte di modellazione nel contrasto al label noise intrinseco del dataset. 
+Innanzitutto, confrontando le due versioni di Triplet Loss, la variante **Triplet (Naive)** (basata sulla formulazione hinge standard con semi-hard mining) si ferma a **~78.0% mAP@1**. Al contrario, la versione **Triplet (Engineered)**, che sfrutta la loss softmargin e l'online hard mining combinati con la normalizzazione L2 post-hoc, raggiunge **~87.0% mAP@1** (+9.0 p.p.). Questo dimostra come il superamento del margine rigido e l'adozione di una penalizzazione fluida consentano di sfruttare appieno l'hard mining senza incorrere nel collasso.
+
+In secondo luogo, emerge un interessante confronto tra le configurazioni "naive": **ArcFace (Naive)** (che impiega una formulazione sub-center con $k=3$) raggiunge il **~83.9% mAP@1**, superando di circa 5.9 p.p. la **Triplet (Naive)**. Questo comportamento è riconducibile al fatto che ArcFace, lavorando direttamente sui margini angolari rispetto ai centri di classe (e mitigando il rumore tramite sub-center multipli), risulta intrinsecamente più robusto rispetto a una formulazione triplet standard basata su margini euclidei/coseno rigidi tra singoli campioni. Ciononostante, l'ottimizzazione mirata della versione **Triplet (Engineered)** le permette di scavalcare anche ArcFace di circa 3.1 p.p.
+
 
 ![train curve of soft margin](../figures/soft.png)
 *Figura: Curve di training per la loss softmargin (file: figures/soft.png).*
@@ -75,22 +80,23 @@ Per isolare l'effetto delle principali scelte progettuali, sono stati confrontat
 
 **Tabella 2**: Ablation sui run triplet
 
-| Run Date   | Sampler   | Embedding | Loss         | Margin | Mining    |     mAP@1     |     mAP@5     |    mAP@10    |
-| :--------- | :-------- | :-------: | :----------- | ------ | :-------- | :-----------: | :-----------: | :-----------: |
-| 2026-05-13 | PK(24, 4) |    128    | Softmargin   | -      | hard      |     .70*     |     .60*     |     .54*     |
-| 2026-05-14 | PK(24, 4) |    512    | Softmargin   | -      | hard      |     .69*     |     .58*     |     .51*     |
-| 2026-05-14 | PK(24, 4) |    512    | Softmargin   | -      | easy      |     .68*     |     .57*     |     .50*     |
-| 2026-05-14 | PK(32, 4) |    512    | Softmargin   | .1     | semi-hard |      .72      |      .62      |      .56      |
-| 2026-05-15 | PK(32, 4) |    512    | Softmargin   | -      | hard      |      .86      |      .80      |      .75      |
-| 2026-05-15 | PK(32, 4) |    512    | Softmargin   | .2     | semi-hard |      .82      |      .74      |      .69      |
-| 2026-05-15 | PK(32, 4) |    512    | Softmargin** | -      | hard      | **.87** | **.81** | **.77** |
-| 2026-05-16 | PK(42, 4) |    512    | Softmargin** | -      | hard      |      .86      |      .80      |      .75      |
-| 2026-05-16 | PK(32, 4) |    512    | Hingemargin  | .1     | hard      |      .25      |      .16      |      .12      |
-| 2026-05-30 | PK(32, 4) |    512    | Hingemargin  | .2     | semi-hard |      .82      |      .75      |      .69      |
+| Run Date   | Sampler   | Embedding | Loss          | Margin | Mining    |     mAP@1     |     mAP@5     |    mAP@10    |
+| :--------- | :-------- | :-------: | :------------ | ------ | :-------- | :-----------: | :-----------: | :-----------: |
+| 2026-05-13 | PK(24, 4) |    128    | Softmargin    | -      | hard      |     .70*     |     .60*     |     .54*     |
+| 2026-05-14 | PK(24, 4) |    512    | Softmargin    | -      | hard      |     .69*     |     .58*     |     .51*     |
+| 2026-05-14 | PK(24, 4) |    512    | Softmargin    | -      | easy      |     .68*     |     .57*     |     .50*     |
+| 2026-05-14 | PK(32, 4) |    512    | Softmargin    | .1     | semi-hard |      .72      |      .62      |      .56      |
+| 2026-05-15 | PK(32, 4) |    512    | Softmargin    | -      | hard      |      .86      |      .80      |      .75      |
+| 2026-05-15 | PK(32, 4) |    512    | Softmargin    | .2     | semi-hard |      .82      |      .74      |      .69      |
+| 2026-05-15 | PK(32, 4) |    512    | Softmargin**  | -      | hard      | **.87** | **.81** | **.77** |
+| 2026-05-16 | PK(42, 4) |    512    | Softmargin**  | -      | hard      |      .86      |      .80      |      .75      |
+| 2026-05-16 | PK(32, 4) |    512    | Hingemargin   | .1     | hard      |      .25      |      .16      |      .12      |
+| 2026-05-30 | PK(32, 4) |    512    | Hingemargin** | .2     | semi-hard |      .82      |      .75      |      .69      |
+| 2026-06-03 | PK(32, 4) |    512    | Hingemargin   | .2     | semi-hard |      .78      |      .69      |      .64      |
 
 *\* Indica presenza di overfitting osservato.*
 
-** L2 loss non applicata
+** L2 norm non applicata
 
 I risultati mostrano tre segnali principali. Primo: la combinazione di hard mining con la loss soft ha prodotto i valori migliori, mentre la variante hinge con hard mining crolla in modo netto (.25 mAP@1) — un collasso attribuibile alla sensibilità al label noise del dataset. Il nuovo run hinge con semi-hard mining (2026-05-30) chiarisce però che il problema non è la formulazione hinge in sé: abbassando l'aggressività del mining, la hinge recupera fino a .82 mAP@1, un risultato competitivo. Il vero fattore discriminante rimane la strategia di mining: hard mining amplifica i benefici della soft ma risulta letale per la hinge in presenza di rumore. Secondo: il salto di qualità non dipende da un singolo parametro isolato, ma dall'interazione tra sampler PK, strategia di mining e formulazione della loss; configurazioni con batch effettivo più piccolo di 32×4 hanno mostrato maggiore tendenza all'overfitting (come evidenziato dai primi tre run contrassegnati con l'asterisco). Terzo: la configurazione con PK(32,4), embedding da 512 e loss soft rimane il compromesso più solido del ciclo sperimentale, con un leggero vantaggio (~1 p.p. da 86% a 87%) quando si disabilita la normalizzazione L2 durante il training — lasciando alla rete più libertà ottimizzativa sulla magnitudo dei vettori, con il weight decay come regolarizzatore implicito — e si applica la L2 esclusivamente in fase di retrieval (post-hoc). Questo risultato è coerente con quanto noto in letteratura: addestrare senza il vincolo della sfera unitaria consente un flusso di gradienti più stabile, mentre la proiezione sull'ipersfera unitaria a posteriori è sufficiente per il retrieval coseno.
 

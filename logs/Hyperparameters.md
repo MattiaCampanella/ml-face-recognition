@@ -9,8 +9,10 @@
 | 2026-05-15      | PK(32, 4) | 512       | 0.1 softmargin | .87   | .81  | .77   | 0.0003        | hard        | only loss norm⬆️
 | 2026-05-16      | PK(42, 4) | 512       | 0.1 softmargin | .86   | .80  | .75   | 0.0003        | hard        | 🌕
 | 2026-05-16      | PK(32, 4) | 512       | 0.1 hingemargin| .25   | .16  | .12   | 0.0003        | hard        | 🤢
+| 2026-05-30      | PK(32, 4) | 512       | 0.2 hingemargin| .82   | .75  | .69   | 0.0003        | semi-hard   | stable hinge ⚖️
+| 2026-06-03      | PK(32, 4) | 512       | 0.2 hingemargin| .78   | .69  | .64   | 0.0003        | semi-hard   | model L2 norm active 📉
 
-\* Overfitting observed
+* Overfitting observed
 
 arcface:
 🎯 mAP@1:      0.821421

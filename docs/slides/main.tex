@@ -50,7 +50,7 @@
 % ================================================================
 % SLIDE 2 — HOOK: Il problema
 % ================================================================
-\begin{frame}{Come riconosci un volto che non hai mai visto?}
+\begin{frame}{Come riconoscere un volto mai visto prima?}
 \begin{columns}[T, onlytextwidth]
 
 %% ---------- colonna sinistra ----------
@@ -118,7 +118,7 @@
 % ================================================================
 % SLIDE 3 — DATASET: CASIA-WebFace
 % ================================================================
-\begin{frame}{CASIA-WebFace: grande, ricco, e con un'insidia nascosta}
+\begin{frame}{CASIA-WebFace}
 \begin{columns}[T, onlytextwidth]
 
 %% ---------- colonna sinistra ----------
@@ -138,40 +138,42 @@
 
     \medskip
     \textbf{Split per identità disgiunte} (zero leakage):\\[0.4em]
-    \begin{tikzpicture}[font=\scriptsize, node distance=0.5cm and 0.25cm]
-        \node[mybox=colPrimary, minimum width=3.8cm] (ds)
+    \begin{tikzpicture}[font=\scriptsize]
+        \node[mybox=colPrimary, minimum width=4.4cm] (ds) at (0, 0)
               {CASIA-WebFace};
-        \node[mybox=colAccent, minimum width=1.65cm,
-              below left=0.60cm and -0.15cm of ds] (tr)
+        \node[mybox=colAccent, minimum width=1.3cm] (tr) at (-1.55, -1.2)
               {\shortstack{Train\\(seen IDs)}};
-        \node[mybox=colHighlight, minimum width=1.65cm,
-              below right=0.60cm and -0.15cm of ds] (te)
-              {\shortstack{Val / Test\\(unseen IDs)}};
-        \draw[myarrow] (ds.south west) -- (tr.north);
-        \draw[-Stealth, thick, color=colHighlight!65!colText] (ds.south east) -- (te.north);
-        \node[color=colRed, font=\tiny, below=0.06cm of te] {zero identity overlap};
+        \node[mybox=colHighlight, minimum width=1.3cm] (val) at (0, -1.2)
+              {\shortstack{Val\\(unseen)}};
+        \node[mybox=colGreen, minimum width=1.3cm] (te) at (1.55, -1.2)
+              {\shortstack{Test\\(unseen)}};
+        \draw[myarrow] (ds.south -| tr.north) -- (tr.north);
+        \draw[-Stealth, thick, color=colHighlight!75!colText] (ds.south) -- (val.north);
+        \draw[-Stealth, thick, color=colGreen!75!colText] (ds.south -| te.north) -- (te.north);
+        \node[color=colRed, font=\tiny] at (0, -2.0) {zero identity overlap};
     \end{tikzpicture}
 \end{column}
 
 %% ---------- colonna destra ----------
 \begin{column}{0.46\textwidth}
-    \begin{alertblock}{\warn{[!]} Label Noise — problema critico}
+    \begin{alertblock}{\warn{[!]} Importanza Data Augmentation}
         \small
-        Studi scientifici (\emph{Anti-noise}, CVPR) stimano in CASIA:
+        La generalizzazione richiede variabilità nei dati:
         \begin{itemize}
-            \item \bad{9.3\%–13\%} di sample rumorosi o errati
-            \item \bad{7.7\%} di \textbf{mislabeling} effettivo
+            \item \textbf{Geometrica}: Crop, HorizontalFlip
+            \item \textbf{Cromatica}: ColorJitter, Grayscale
         \end{itemize}
         \medskip
-        \emphc{Impatto diretto} sul training con hard mining:\\
-        i falsi negativi avvelenano il gradiente.
+        \emphc{Impatto diretto}:\\
+        riduce drasticamente l'overfitting, astraendo le
+        feature chiave dell'identità.
     \end{alertblock}
 
     \medskip
-    {\small\textbf{Perché è critico?}\\[0.2em]
-    Con hard mining il modello cerca attivamente i casi più
-    difficili. Se sono rumorosi, distruggono il segnale
-    di apprendimento — lo vedremo nella slide successiva.}
+    {\small\textbf{Perché è critica?}\\[0.2em]
+    Simulando le variazioni ambientali (es. luci diverse,
+    posa) forziamo la rete a ignorare dettagli irrilevanti
+    e diventare invariante ai disturbi.}
 \end{column}
 
 \end{columns}
@@ -202,8 +204,7 @@
 
         \node[color=colAccent!70!colText, font=\tiny, below=0.05cm of bb]
               {\shortstack{pretrained\\ImageNet}};
-        \node[color=colHighlight!75!colText, font=\tiny, below=0.05cm of l2]
-              {cosine sim.};
+
 
         % Training path (dashed)
         \node[mybox=colPrimary!55!white, minimum width=1.35cm,
@@ -246,32 +247,29 @@
     % Bar chart baseline
     \begin{tikzpicture}
         % Scale: 1% -> 0.027cm
-        \fill[colAccent!48!white] (0.10,0) rectangle (0.52,1.701); % 63%
-        \fill[colAccent!33!white] (0.70,0) rectangle (1.12,1.369); % 50.7%
-        \fill[colAccent!18!white] (1.30,0) rectangle (1.72,1.191); % 44.1%
+        \fill[colAccent!48!white] (0.20,0) rectangle (0.80,1.701); % 63%
+        \fill[colAccent!33!white] (1.30,0) rectangle (1.90,1.369); % 50.7%
+        \fill[colAccent!18!white] (2.40,0) rectangle (3.00,1.191); % 44.1%
         % Value labels
-        \node[font=\tiny, above] at (0.31,1.701) {63\%};
-        \node[font=\tiny, above] at (0.91,1.369) {51\%};
-        \node[font=\tiny, above] at (1.51,1.191) {44\%};
+        \node[font=\tiny, above] at (0.50,1.701) {63\%};
+        \node[font=\tiny, above] at (1.60,1.369) {51\%};
+        \node[font=\tiny, above] at (2.70,1.191) {44\%};
         % Axis labels
-        \node[font=\tiny, below] at (0.31,-0.05) {mAP@1};
-        \node[font=\tiny, below] at (0.91,-0.05) {mAP@5};
-        \node[font=\tiny, below] at (1.51,-0.05) {mAP@10};
+        \node[font=\tiny, below] at (0.50,-0.05) {mAP@1};
+        \node[font=\tiny, below] at (1.60,-0.05) {mAP@5};
+        \node[font=\tiny, below] at (2.70,-0.05) {mAP@10};
         % Y axis
         \draw[-Stealth, colText!25!white, thin] (0.0,0) -- (0.0,2.85);
         % Grid
-        \draw[colText!12!white, thin] (0.0,0.675) -- (2.0,0.675);
+        \draw[colText!12!white, thin] (0.0,0.675) -- (3.5,0.675);
         \node[font=\tiny, left, color=colText!45!white] at (0.0,0.675) {25\%};
-        \draw[colText!12!white, thin] (0.0,1.350) -- (2.0,1.350);
+        \draw[colText!12!white, thin] (0.0,1.350) -- (3.5,1.350);
         \node[font=\tiny, left, color=colText!45!white] at (0.0,1.350) {50\%};
-        \draw[colText!12!white, thin] (0.0,2.025) -- (2.0,2.025);
+        \draw[colText!12!white, thin] (0.0,2.025) -- (3.5,2.025);
         \node[font=\tiny, left, color=colText!45!white] at (0.0,2.025) {75\%};
-        \draw[colText!12!white, thin] (0.0,2.700) -- (2.0,2.700);
+        \draw[colText!12!white, thin] (0.0,2.700) -- (3.5,2.700);
         \node[font=\tiny, left, color=colText!45!white] at (0.0,2.700) {100\%};
     \end{tikzpicture}
-
-    \smallskip
-    {\small\warn{Ampio margine di miglioramento} $\to$ metric learning}
 \end{column}
 
 \end{columns}
@@ -294,15 +292,15 @@
         % Positive
         \node[circle, draw=colGreen, fill=colGreen, text=white,
               minimum size=0.92cm, font=\small\bfseries,
-              above right=1.05cm and 2.20cm of A] (P) {P\!+};
+              above right=0.60cm and 1.20cm of A] (P) {P};
         \node[above=0.05cm of P, colGreen, font=\tiny] {Positive (stessa ID)};
         % Negative
         \node[circle, draw=colRed, fill=colRed, text=white,
               minimum size=0.92cm, font=\small\bfseries,
-              below right=1.05cm and 2.20cm of A] (N) {N\!-};
-        \node[below=0.05cm of N, colRed, font=\tiny] {Negative (altra ID)};
+              below right=1.05cm and 2.20cm of A] (N) {N};
+        \node[below=0.05cm of N, colRed, font=\tiny] {Negative (diversa ID)};
         % Frecce
-        \draw[-Stealth, colGreen, thick] (A.north east) -- (P.west)
+        \draw[Stealth-, colGreen, thick] (A.north east) -- (P.south west)
               node[midway, above, sloped, font=\tiny] {\good{vicini}};
         \draw[-Stealth, colRed, thick] (A.south east) -- (N.west)
               node[midway, below, sloped, font=\tiny] {\bad{lontani}};
@@ -356,29 +354,28 @@
 
 %% ---------- colonna sinistra ----------
 \begin{column}{0.47\textwidth}
-    \begin{alertblock}{\bad{[X]} Hinge — instabile con label noise}
+    \begin{alertblock}{\warn{[!]} Hinge + Semi-Hard stabile ma lenta}
+        \vspace*{-0.3cm}
         \[
           \mathcal{L}_{\mathrm{hinge}} =
-          \max\!\bigl(0,\; d^{+} - d^{-} + m\bigr)
+          \max\!\bigl(0,\; d(x_a, x_p) - d(x_a, x_n) + m\bigr)
         \]
-        {\small Margine esplicito $m$: i mislabeled CASIA diventano
-        falsi hard negative e \textbf{avvelenano il gradiente} $\to$
-        collasso del modello.}
+        {\small Evita il collasso dovuto al label noise, ma la convergenza con margine rigido risulta più lenta e meno efficiente rispetto alla controparte soft.}
     \end{alertblock}
 
     \medskip
     \includegraphics[width=\linewidth, height=3.5cm,
-                     keepaspectratio]{hinge.png}\\
+                     keepaspectratio]{hinge_semihard.png}\\
     {\tiny\centering\color{colText!55!white}
-        Curve hinge + hard mining: collasso visibile\par}
+        Curve hinge + semi-hard mining: solido\par}
 \end{column}
 
 %% ---------- colonna destra ----------
 \begin{column}{0.47\textwidth}
-    \begin{exampleblock}{\good{[OK]} Softplus — robusta al rumore}
+    \begin{exampleblock}{SoftPlus + Hard Mining robusta al rumore}
         \[
           \mathcal{L}_{\mathrm{soft}} =
-          \log\!\Bigl(1 + e^{\,d^{+} - d^{-}}\Bigr)
+          \ln\!\Bigl(1 + e^{d(x_a, x_p) - d(x_a, x_n)}\Bigr)
         \]
         {\small Nessun margine fisso: penalizzazione continua e
         proporzionale. Tollerante al noise $\to$ convergenza
@@ -396,47 +393,46 @@
 
 \vspace{0.30cm}
 \centering
-{\small\color{colPrimary}
-Con il \emphc{13\% di label noise} di CASIA, la formulazione
-\emph{soft} non è solo migliore:
-è \textbf{necessaria} per la stabilità del training.}
+
 \end{frame}
 
 % ================================================================
 % SLIDE 7 — RISULTATI
 % ================================================================
+
+
 \begin{frame}{+24 p.p. di mAP@1: il metric learning supera nettamente il baseline}
 \begin{columns}[T, onlytextwidth]
 
 %% ---------- colonna sinistra ----------
 \begin{column}{0.52\textwidth}
-    \small\renewcommand{\arraystretch}{1.40}
+    \footnotesize\renewcommand{\arraystretch}{1.15}
     \begin{center}
     \begin{tabular}{lccc}
         \toprule
         \textbf{Modello} & \textbf{@1} & \textbf{@5} & \textbf{@10} \\
         \midrule
         Baseline (CE)         & 63.0\% & 50.7\% & 44.1\% \\
+        Triplet (Naive)       & 78.0\% & 69.0\% & 64.0\% \\
         \rowcolor{colGreen!18!white}
-        \textbf{Triplet Soft} & \textbf{87.0\%} & \textbf{81.0\%} & \textbf{77.0\%} \\
-        ArcFace               & 82.1\% & 74.6\% & 69.0\% \\
+        \textbf{Triplet (Eng.)} & \textbf{87.0\%} & \textbf{81.0\%} & \textbf{77.0\%} \\
+        ArcFace (Naive)       & 83.9\% & 77.1\% & 71.8\% \\
         \bottomrule
     \end{tabular}
     \end{center}
 
-    \medskip
+    \smallskip
     \textbf{Cosa emerge:}
     \begin{enumerate}
-        \item \good{+24 p.p.} di mAP@1 rispetto al baseline
-        \item Triplet Soft \good{supera ArcFace} di +4.9 p.p. @1
-        \item ArcFace comunque \good{+19 p.p.} vs baseline
+        \item \good{Triplet (Eng.)} ottiene \good{+24 p.p.} di mAP@1 rispetto al baseline.
+        \item \good{Eng. vs Naive}: softmargin + hard-mining superano hinge + semi-hard di \good{+9 p.p.} @1.
+        \item \good{ArcFace (Naive)} supera Triplet (Naive) di +5.9 p.p., ma cede a Triplet (Eng.).
     \end{enumerate}
 
-    \medskip
-    {\small\color{colText!65!white}
-    Il vantaggio è frutto dell'interazione tra
-    \emphc{soft loss} + \emphc{hard mining} + \emphc{PK(32,4)},
-    non di un singolo iperparametro.}
+    \smallskip
+    {\scriptsize\color{colText!65!white}
+    Il vantaggio di Triplet (Eng.) è dovuto a:
+    \emphc{soft loss} + \emphc{hard mining} + \emphc{PK(32,4)}.}
 \end{column}
 
 %% ---------- colonna destra ----------
@@ -444,98 +440,107 @@ Con il \emphc{13\% di label noise} di CASIA, la formulazione
     \centering
     % Grouped bar chart — hardcoded per evitare ambiguità TikZ
     % Scale: 1% -> 0.028cm  |  bar width: 0.26cm  |  gap: 0.05cm
+    \resizebox{\linewidth}{!}{
     \begin{tikzpicture}
         % === Group @1 (starts x=0.10) ===
         \fill[colAccent!45!white]    (0.10,0) rectangle (0.36,1.764); % 63%
-        \fill[colGreen!80!white]     (0.41,0) rectangle (0.67,2.436); % 87%
-        \fill[colHighlight!65!white] (0.72,0) rectangle (0.98,2.299); % 82.1%
-        % === Group @5 (starts x=1.32) ===
-        \fill[colAccent!45!white]    (1.32,0) rectangle (1.58,1.420); % 50.7%
-        \fill[colGreen!80!white]     (1.63,0) rectangle (1.89,2.268); % 81%
-        \fill[colHighlight!65!white] (1.94,0) rectangle (2.20,2.089); % 74.6%
-        % === Group @10 (starts x=2.54) ===
-        \fill[colAccent!45!white]    (2.54,0) rectangle (2.80,1.235); % 44.1%
-        \fill[colGreen!80!white]     (2.85,0) rectangle (3.11,2.156); % 77%
-        \fill[colHighlight!65!white] (3.16,0) rectangle (3.42,1.932); % 69%
+        \fill[colGreen!40!white]     (0.41,0) rectangle (0.67,2.184); % 78% (Triplet Naive)
+        \fill[colGreen!80!white]     (0.72,0) rectangle (0.98,2.436); % 87% (Triplet Engineered)
+        \fill[colHighlight!65!white] (1.03,0) rectangle (1.29,2.349); % 83.9% (ArcFace Naive)
+        % === Group @5 (starts x=1.63) ===
+        \fill[colAccent!45!white]    (1.63,0) rectangle (1.89,1.420); % 50.7%
+        \fill[colGreen!40!white]     (1.94,0) rectangle (2.20,1.932); % 69% (Triplet Naive)
+        \fill[colGreen!80!white]     (2.25,0) rectangle (2.51,2.268); % 81% (Triplet Engineered)
+        \fill[colHighlight!65!white] (2.56,0) rectangle (2.82,2.159); % 77.1% (ArcFace Naive)
 
         % Etichette gruppi
-        \node[font=\tiny, below] at (0.54,-0.06) {mAP@1};
-        \node[font=\tiny, below] at (1.76,-0.06) {mAP@5};
-        \node[font=\tiny, below] at (2.98,-0.06) {mAP@10};
+        \node[font=\tiny, below] at (0.695,-0.06) {mAP@1};
+        \node[font=\tiny, below] at (2.225,-0.06) {mAP@5};
 
         % Asse Y
         \draw[-Stealth, colText!22!white, thin] (0.02,0) -- (0.02,2.95);
         % Griglia
-        \draw[colText!10!white, thin] (0.05,0.700) -- (3.55,0.700);
+        \draw[colText!10!white, thin] (0.05,0.700) -- (2.95,0.700);
         \node[font=\tiny, left, color=colText!45!white] at (0.02,0.700) {25\%};
-        \draw[colText!10!white, thin] (0.05,1.400) -- (3.55,1.400);
+        \draw[colText!10!white, thin] (0.05,1.400) -- (2.95,1.400);
         \node[font=\tiny, left, color=colText!45!white] at (0.02,1.400) {50\%};
-        \draw[colText!10!white, thin] (0.05,2.100) -- (3.55,2.100);
+        \draw[colText!10!white, thin] (0.05,2.100) -- (2.95,2.100);
         \node[font=\tiny, left, color=colText!45!white] at (0.02,2.100) {75\%};
+        \draw[colText!10!white, thin] (0.05,2.800) -- (2.95,2.800);
+        \node[font=\tiny, left, color=colText!45!white] at (0.02,2.800) {100\%};
 
-        % Legenda
-        \fill[colAccent!45!white]    (0.10,2.72) rectangle (0.32,2.84);
-        \node[right, font=\tiny] at (0.34,2.78) {Baseline};
-        \fill[colGreen!80!white]     (1.10,2.72) rectangle (1.32,2.84);
-        \node[right, font=\tiny] at (1.34,2.78) {Triplet};
-        \fill[colHighlight!65!white] (2.10,2.72) rectangle (2.32,2.84);
-        \node[right, font=\tiny] at (2.34,2.78) {ArcFace};
-
-        % Annotazione +24pp
-        \draw[colGreen, thin, -Stealth]
-            (0.23,1.764) -- (0.23,2.436)
-            node[midway, right, font=\tiny, color=colGreen] {+24pp};
-        \draw[colGreen, thin, -Stealth]
-            (0.23,2.436) -- (0.23,1.764);
+        % Legenda (lista a destra del grafico)
+        \fill[colAccent!45!white]    (3.20,2.20) rectangle (3.40,2.32);
+        \node[right, font=\tiny] at (3.42,2.26) {Baseline};
+        \fill[colGreen!40!white]     (3.20,1.80) rectangle (3.40,1.92);
+        \node[right, font=\tiny] at (3.42,1.86) {Trip.(N)};
+        \fill[colGreen!80!white]     (3.20,1.40) rectangle (3.40,1.52);
+        \node[right, font=\tiny] at (3.42,1.46) {Trip.(E)};
+        \fill[colHighlight!65!white] (3.20,1.00) rectangle (3.40,1.12);
+        \node[right, font=\tiny] at (3.42,1.06) {ArcFace};
     \end{tikzpicture}
+    }
 \end{column}
-
 \end{columns}
 \end{frame}
 
 % ================================================================
 % SLIDE 8 — SPAZIO LATENTE
 % ================================================================
-\begin{frame}{Lo spazio latente si organizza: cluster compatti per identità}
+\begin{frame}{Perché non possiamo ottimizzare Hinge con l'Hard Mining?}
+\vspace*{-0.35cm}
 \begin{columns}[T, onlytextwidth]
 
 %% ---------- colonna sinistra ----------
-\begin{column}{0.46\textwidth}
-    \centering
-    {\small\bfseries t-SNE degli embedding (Triplet Soft)}\\[0.25em]
-    \includegraphics[width=0.96\linewidth, height=4.2cm,
-                     keepaspectratio]{tsne_triplet.png}
-
+\begin{column}{0.48\textwidth}
+    \begin{alertblock}{{\color{colAccent}\textbf{[Instabile]}} Hinge + Hard Mining}
+        \scriptsize
+        La combinazione impedisce una convergenza stabile, degradando lo spazio latente (\textbf{mAP@1 $\approx$ 25\%}).
+    \end{alertblock}
+    
     \smallskip
-    {\small\bfseries PCA degli embedding (Triplet Soft)}\\[0.25em]
-    \includegraphics[width=0.96\linewidth, height=2.8cm,
-                     keepaspectratio]{pca_triplet.png}
+    {\centering
+    \includegraphics[width=0.95\linewidth, height=2.1cm, keepaspectratio]{hinge.png}\\
+    \vskip -0.15cm
+    {\tiny\color{colText!55!white}
+        Hinge + Hard Mining: gradienti instabili e forti oscillazioni\par}
+    \par}
+        
+    \smallskip
+    {\scriptsize
+    \begin{itemize}
+        \setlength{\itemsep}{2pt}
+        \setlength{\parskip}{0pt}
+        \item \textbf{Sensibilità agli Outlier}: L'hard mining seleziona negativi atipici o etichettati erroneamente (rumore/outliers) trattandoli come falsi negativi estremi.
+        \item \textbf{Margine Rigido}: Hinge impone una penale e un gradiente costante su questi errori, corrompendo lo spazio.
+    \end{itemize}
+    }
 \end{column}
 
 %% ---------- colonna destra ----------
-\begin{column}{0.50\textwidth}
-    \textbf{Cosa mostrano i plot}:\\[0.3em]
+\begin{column}{0.48\textwidth}
+    \begin{exampleblock}{{\color{colAccent}\textbf{[Stabile]}} Soft Margin + Hard Mining}
+        \scriptsize
+        Convergenza rapida e stabile (\textbf{mAP@1 $\approx$ 87\%}).
+    \end{exampleblock}
+    
+    \smallskip
+    {\centering
+    \includegraphics[width=0.95\linewidth, height=2.1cm, keepaspectratio]{soft.png}\\
+    \vskip -0.15cm
+    {\tiny\color{colText!55!white}
+        Soft Margin + Hard Mining: convergenza robusta\par}
+    \par}
+        
+    \smallskip
+    {\scriptsize
     \begin{itemize}
-        \item Cluster \good{compatti e separati} per identità
-        \item Spazio coseno \good{ben strutturato} $\to$ retrieval efficace
-        \item Rispetto al baseline: embedding più \warn{dispersi e sovrapposti}
+        \setlength{\itemsep}{2pt}
+        \setlength{\parskip}{0pt}
+        \item \textbf{Gradiente Fluido}: La loss `softplus` attenua in modo asintotico l'influenza dei campioni troppo difficili.
+        \item \textbf{Robustezza Intrinseca}: Il modello tollera le anomalie senza indebolire la durezza del mining.
     \end{itemize}
-
-    \medskip
-    \textbf{Le training curve confermano}:\\[0.3em]
-    \begin{itemize}
-        \item \good{Softmargin}: $d^-$ cresce stabilmente,\\
-              $d^+$ si riduce gradualmente
-        \item \bad{Hingemargin}: $d^+$ diverge in corrispondenza\\
-              dei sample rumorosi $\to$ collasso
-    \end{itemize}
-
-    \medskip
-    \begin{block}{\small Validazione qualitativa}
-        \small L'analisi visiva corrobora i numeri di mAP:\\
-        le identità si separano nello spazio degli embedding
-        L2-normalizzati a 512 dimensioni.
-    \end{block}
+    }
 \end{column}
 
 \end{columns}
@@ -545,15 +550,16 @@ Con il \emphc{13\% di label noise} di CASIA, la formulazione
 % SLIDE 9 — CONCLUSIONI
 % ================================================================
 \begin{frame}{Conclusioni: soft mining + PK batch = +24 p.p. zero-shot}
+\vspace*{-0.35cm}
 \begin{columns}[T, onlytextwidth]
 
 %% ---------- colonna sinistra ----------
 \begin{column}{0.54\textwidth}
-    \begin{exampleblock}{\good{[OK]} Messaggio principale}
+    \begin{exampleblock}{Messaggio principale}
         \small
         Il Triplet con \emphc{soft loss} e \emphc{PK(32,4)} porta il mAP@1
         \textbf{dal 63\% all'87\%}, superando anche ArcFace
-        (+4.9 p.p.)\\[0.3em]
+        (+3.1 p.p.)\\[0.3em]
         La chiave: la formulazione \emph{soft} è più importante
         del valore del margine, specialmente con dataset rumorosi.
     \end{exampleblock}
@@ -587,7 +593,6 @@ Con il \emphc{13\% di label noise} di CASIA, la formulazione
     \textbf{Lavoro futuro:}
     \begin{itemize}
         \item Noise detection semi-supervisionata
-        \item Sub-center ArcFace per cluster rumorosi
         \item Face alignment preprocessing (MTCNN)
     \end{itemize}
 \end{column}
@@ -596,25 +601,8 @@ Con il \emphc{13\% di label noise} di CASIA, la formulazione
 \end{frame}
 
 % ================================================================
-% BACKUP SLIDE — Demo Website (non conteggiata nel timing)
+% SLIDE 10 — Demo Live
 % ================================================================
-\appendix
-
-\setbeamertemplate{footline}{%
-    \leavevmode%
-    \hbox{%
-        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
-                               leftskip=0.5em]{author in head/foot}%
-            \tiny G25\enspace$\cdot$\enspace Backup — Demo Website
-        \end{beamercolorbox}%
-        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
-                               rightskip=0.5em, right]{date in head/foot}%
-            \tiny Backup
-        \end{beamercolorbox}%
-    }%
-    \vskip0pt%
-}
-
 \begin{frame}{Demo Live: Riconoscimento in Azione}
 \centering
 \textbf{Demo live del modello disponibile online}\\[0.5em]
@@ -622,4 +610,395 @@ Con il \emphc{13\% di label noise} di CASIA, la formulazione
 \href{https://clusteringdemo.vercel.app}{\color{colAccent}\textbf{\large clusteringdemo.vercel.app}}
 \end{frame}
 
+\appendix
+
+% ================================================================
+% SLIDE DIVISORE BACKUP
+% ================================================================
+\begin{frame}[plain, noframenumbering]
+    \begin{tikzpicture}[remember picture, overlay]
+        % Sfondo navy
+        \fill[colPrimary]
+            (current page.north west) rectangle (current page.south east);
+        % Barra accent in basso
+        \fill[colAccent]
+            (current page.south west) rectangle ++(\paperwidth, 0.75cm);
+        % Cerchi decorativi
+        \fill[colAccent!35!colPrimary, opacity=0.22]
+            ([xshift=2.2cm, yshift=-2.2cm]current page.north east) circle (5.8cm);
+        \fill[white, opacity=0.04]
+            ([xshift=-1.5cm, yshift=1.5cm]current page.south west) circle (4.5cm);
+    \end{tikzpicture}
+    %
+    \vspace{1.8cm}
+    \begin{center}
+        {\color{white}\Huge\bfseries BACKUP SLIDES}\\[1.0em]
+        \begin{tikzpicture}
+            \draw[colAccent, line width=1.5pt] (0,0) -- (4cm,0);
+        \end{tikzpicture}\\[1.0em]
+        {\color{white!80!colPrimary}\large Approfondimenti e Analisi Dettagliate}
+    \end{center}
+\end{frame}
+
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — Ablation Study
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 1\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% BACKUP SLIDE — Ablation Study
+% ================================================================
+\begin{frame}{Studio di Ablazione Completo}
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{llclccccc}
+    \toprule
+    \textbf{Data} & \textbf{Sampler} & \textbf{Dim} & \textbf{Loss} & \textbf{Margine} & \textbf{Mining} & \textbf{mAP@1} & \textbf{mAP@5} & \textbf{mAP@10} \\
+    \midrule
+    13/05 & PK(24, 4) & 128 & Softmargin & -- & hard & 70.0\%* & 60.0\%* & 54.0\%* \\
+    14/05 & PK(24, 4) & 512 & Softmargin & -- & hard & 69.0\%* & 58.0\%* & 51.0\%* \\
+    14/05 & PK(24, 4) & 512 & Softmargin & -- & easy & 68.0\%* & 57.0\%* & 50.0\%* \\
+    14/05 & PK(32, 4) & 512 & Softmargin & 0.1 & semi-hard & 72.0\% & 62.0\% & 56.0\% \\
+    15/05 & PK(32, 4) & 512 & Softmargin & -- & hard & 86.0\% & 80.0\% & 75.0\% \\
+
+    \rowcolor{colGreen!15!white}
+    \textbf{15/05} & \textbf{PK(32, 4)} & \textbf{512} & \textbf{Softmargin\textsuperscript{\textdagger}} & \textbf{--} & \textbf{hard} & \textbf{87.0\%} & \textbf{81.0\%} & \textbf{77.0\%} \\
+    16/05 & PK(42, 4) & 512 & Softmargin\textsuperscript{\textdagger} & -- & hard & 86.0\% & 80.0\% & 75.0\% \\
+    16/05 & PK(32, 4) & 512 & Hingemargin & 0.1 & hard & 25.0\% & 16.0\% & 12.0\% \\
+    30/05 & PK(32, 4) & 512 & Hingemargin\textsuperscript{\textdagger} & 0.2 & semi-hard & 82.0\% & 75.0\% & 69.0\% \\
+    03/06 & PK(32, 4) & 512 & Hingemargin & 0.2 & semi-hard & 78.0\% & 69.0\% & 64.0\% \\
+    \bottomrule
+\end{tabular}
+
+\smallskip
+{\tiny\raggedright
+* Indica presenza di overfitting osservato durante il training. \quad
+\textdagger \ L2 normalization non applicata durante il training.\par}
+\end{frame}
+
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — Setup Dettagliato
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 2\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% BACKUP SLIDE — Setup Dettagliato
+% ================================================================
+\begin{frame}{Dettagli di Addestramento e Preprocessing}
+\begin{columns}[T, onlytextwidth]
+
+%% ---------- colonna sinistra ----------
+\begin{column}{0.48\textwidth}
+    \begin{block}{\small Setup di Ottimizzazione}
+        \scriptsize
+        Parametri e strategie per la stabilità del gradiente:
+    \end{block}
+
+    \smallskip
+    \begin{itemize}
+        \setlength{\itemsep}{3pt}
+        \setlength{\parskip}{0pt}
+        \scriptsize
+        \item \textbf{Ottimizzatore}: AdamW con $\eta = 3\!\times\!10^{-3}$ e weight decay $= 10^{-2}$.
+        \item \textbf{Scheduler}: \emph{CosineAnnealingLR} ($T_{\max}=30$, $\eta_{\min}=10^{-6}$).
+        \item \textbf{Arresto Precoce}: Disabilitato nel run migliore; monitorato su \texttt{val\_map@5}.
+        \item \textbf{Gradient Clipping}: Max norm $= 5.0$ per contenere picchi di gradiente.
+    \end{itemize}
+\end{column}
+
+%% ---------- colonna destra ----------
+\begin{column}{0.48\textwidth}
+    \begin{block}{\small Preprocessing e Data Augmentation}
+        \scriptsize
+        Trasformazioni geometriche e cromatiche (solo training):
+    \end{block}
+
+    \smallskip
+    \begin{itemize}
+        \setlength{\itemsep}{3pt}
+        \setlength{\parskip}{0pt}
+        \scriptsize
+        \item \textbf{Risoluzione}: Resize a $256\!\times\!256$, poi \emph{RandomResizedCrop} a $224\!\times\!224$ (scale 0.8–1.0).
+        \item \textbf{Augmentation}:
+            \begin{itemize}
+                \scriptsize
+                \item \emph{RandomHorizontalFlip} ($p=0.5$): invarianza speculare.
+                \item \emph{ColorJitter}: brightness, contrast, saturation, hue.
+                \item \emph{RandomGrayscale} ($p=0.05$): robustezza cromatica.
+            \end{itemize}
+        \item \textbf{Normalizzazione}: canali RGB su medie/std ImageNet.
+    \end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — Triplet vs ArcFace
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 3\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% BACKUP SLIDE — Triplet vs ArcFace
+% ================================================================
+\begin{frame}{Differenze Teoriche: Triplet Loss vs ArcFace}
+\begin{columns}[T, onlytextwidth]
+
+%% ---------- colonna sinistra ----------
+\begin{column}{0.48\textwidth}
+    \begin{block}{\small Triplet Loss: Confronto Relativo (Locale)}
+        \scriptsize
+        Ottimizza le distanze relative all'interno di mini-batch locali (tuple di 3 campioni).
+    \end{block}
+
+    \smallskip
+    \begin{itemize}
+        \setlength{\itemsep}{2pt}
+        \setlength{\parskip}{0pt}
+        \scriptsize
+        \item \textbf{Formulazione}: Spinge $d(x_a, x_p) \to 0$ e allontana $d(x_a, x_n)$ oltre un margine $m$:
+        \[
+          \mathcal{L} = \max\!\bigl(0, d(x_a,x_p) - d(x_a,x_n) + m\bigr)
+        \]
+        \item \textbf{Spazio Latente}: Struttura locale flessibile; le classi non hanno un centro fisso e possono disperdersi.
+        \item \textbf{Limiti}:
+            \begin{itemize}
+                \scriptsize
+                \item Complessità combinatoria delle triplette $O(N^3)$.
+                \item Richiede algoritmi di \emph{mining} online complessi.
+                \item Sensibile al label noise locale.
+            \end{itemize}
+    \end{itemize}
+\end{column}
+
+%% ---------- colonna destra ----------
+\begin{column}{0.48\textwidth}
+    \begin{block}{\small ArcFace: Margine Angolare (Globale)}
+        \scriptsize
+        Approccio basato su classificazione softmax con margine additivo applicato geodeticamente sull'ipersfera unitaria.
+    \end{block}
+
+    \smallskip
+    \begin{itemize}
+        \setlength{\itemsep}{2pt}
+        \setlength{\parskip}{0pt}
+        \scriptsize
+        \item \textbf{Formulazione}: Modifica la logit inserendo un margine angolare $m$ rispetto al peso-prototipo $W_j$:
+        \[
+          \mathcal{L} = -\log \frac{e^{s \cos(\theta_{y_i} + m)}}{e^{s \cos(\theta_{y_i} + m)} + \sum_{j \neq y_i} e^{s \cos \theta_j}}
+        \]
+        \item \textbf{Spazio Latente}: Gli embedding sono proiettati su $S^{d-1}$. Le classi formano cluster iper-compatti attorno a prototipi globali $W_j$.
+        \item \textbf{Vantaggi e Limiti}:
+            \begin{itemize}
+                \scriptsize
+                \item Nessun mining richiesto; training stabile.
+                \item Complessità lineare con le identità $O(N \cdot C)$.
+                \item Richiede molta memoria GPU per dataset con milioni di classi ($C$ elevato).
+            \end{itemize}
+    \end{itemize}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — ArcFace: Robustezza
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 4\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% BACKUP SLIDE — ArcFace Robustness Experiments
+% ================================================================
+\begin{frame}{ArcFace: Tentativi di Miglioramento della Robustezza}
+\begin{columns}[T, onlytextwidth]
+
+%% ---------- colonna sinistra ----------
+\begin{column}{0.50\textwidth}
+    \begin{block}{\small Ablation sul Margine Angolare $m$ (k=1)}
+        \scriptsize
+        Fissati $s=64$, $\eta=10^{-4}$, backbone ResNet-18 pretrained.
+    \end{block}
+
+    \smallskip
+    \scriptsize\renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{cccc}
+        \toprule
+        $m$ & \textbf{mAP@1} & \textbf{mAP@5} & \textbf{mAP@10} \\
+        \midrule
+        0.5 (paper)  & 78.2\% & 69.8\% & 64.1\% \\
+        \textbf{0.3} & \textbf{82.1\%} & \textbf{74.6\%} & \textbf{69.0\%} \\
+        \bottomrule
+    \end{tabular}
+
+    \smallskip
+    {\scriptsize\color{colText!65!white}
+    \warn{Osservazione}: il margine $m=0.5$ suggerito dal paper originale su CASIA
+    è sub-ottimale con ResNet-18. Un margine ridotto ($m=0.3$) produce embedding
+    più stabili grazie alla minore pressione angolare con backbone più leggero.}
+\end{column}
+
+%% ---------- colonna destra ----------
+\begin{column}{0.46\textwidth}
+    \begin{block}{\small Sub-Center ArcFace ($k=3$) — Robustezza al Noise}
+        \scriptsize
+        Ogni classe ha $k$ centri angolari anziché uno solo (Deng et al., 2020).
+    \end{block}
+
+    \smallskip
+    \scriptsize\renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{cccc}
+        \toprule
+        $m$ & $k$ & \textbf{mAP@1} & \textbf{mAP@5} \\
+        \midrule
+        \rowcolor{colGreen!15!white}
+        \textbf{0.2} & \textbf{3} & \textbf{83.9\%} & \textbf{77.1\%} \\
+        0.3 & 3 & 46.8\%\bad{*} & 34.4\%\bad{*} \\
+        0.5 & 3 & 74.7\% & 65.4\% \\
+        \bottomrule
+    \end{tabular}
+
+    \smallskip
+    {\tiny\color{colText!65!white}
+    \bad{*} Run anomalo (60 epoche): instabilità nel training prolungato.}
+
+    \smallskip
+    {\tiny
+    \begin{itemize}
+        \setlength{\itemsep}{1pt}
+        \setlength{\parskip}{0pt}
+        \item \textbf{$k=3$, $m=0.2$}: \good{picco ArcFace 83.9\%}, ma sotto Triplet (Eng.) (87.0\%).
+        \item Riduce la penalità su campioni ambigui, ma instabile con margini ampi.
+        \item \emphc{Conclusione}: $k>1$ non compensa il gap vs. Triplet + hard mining.
+    \end{itemize}
+    }
+\end{column}
+
+\end{columns}
+\end{frame}
+
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — Spazio Latente
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 5\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% ================================================================
+% BACKUP SLIDE — Visualizzazione Spazio Latente PCA
+% ================================================================
+\begin{frame}{Visualizzazione dello Spazio Latente: PCA}
+\vspace*{-0.20cm}
+
+\begin{columns}[T, onlytextwidth]
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Baseline (CE)}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{pca_baseline.png}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Hinge + Semi-Hard}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{pca_hinge.png}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Triplet (Eng.) — Best}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{pca_triplet.png}
+    \end{column}
+\end{columns}
+
+\vspace{0.4cm}
+{\tiny\centering\color{colText!55!white}
+    PCA (2 componenti principali) su un campione di 20 identità dal validation set.
+    I colori rappresentano identità distinte.\par}
+\end{frame}
+
+% ================================================================
+% BACKUP SLIDE — Visualizzazione Spazio Latente t-SNE
+% ================================================================
+\setbeamertemplate{footline}{%
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.72\paperwidth, ht=2.1ex, dp=0.9ex,
+                               leftskip=0.5em]{author in head/foot}%
+            \tiny G25\enspace$\cdot$\enspace Backup — Spazio Latente
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.28\paperwidth, ht=2.1ex, dp=0.9ex,
+                               rightskip=0.5em, right]{date in head/foot}%
+            \tiny Backup 6\hspace*{1.5em}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+\begin{frame}{Visualizzazione dello Spazio Latente: t-SNE}
+\vspace*{-0.20cm}
+
+\begin{columns}[T, onlytextwidth]
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Baseline (CE)}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{tsne_baseline.png}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Hinge + Semi-Hard}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{tsne_hinge.png}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+        \centering{\scriptsize\textbf{Triplet (Eng.) — Best}}\\[0.1cm]
+        \includegraphics[width=\linewidth, height=4.5cm, keepaspectratio]{tsne_triplet.png}
+    \end{column}
+\end{columns}
+
+\vspace{0.4cm}
+{\tiny\centering\color{colText!55!white}
+    t-SNE ($\perp=30$, 1000 iter.) su un campione di 20 identità dal validation set.
+    I colori rappresentano identità distinte. Triplet (Eng.) mostra cluster nettamente separati rispetto al Baseline.\par}
+\end{frame}
+
 \end{document}
+
