@@ -1,5 +1,3 @@
-
-
 # Metric Learning for Face Recognition
 
 [![Demo](https://img.shields.io/badge/Demo-Streamlit-green)](https://clusteringdemo.vercel.app)
@@ -7,10 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 👥 Group and Project Information
+
 - **Group ID**: G25
 - **Project ID**: 1
 
 ## 📝 Project Description
+
 This project investigates metric learning for face recognition on CASIA-WebFace, focusing on identity retrieval and latent-space clustering.
 We train a ResNet-18 backbone to produce L2-normalized embeddings and optimize them with triplet loss, PK sampling, and online mining.
 Compared with a standard classification baseline, the learned representation yields more compact identities and stronger retrieval performance.
@@ -18,20 +18,8 @@ Compared with a standard classification baseline, the learned representation yie
 > 📖 **Official Report**: For all theoretical details, performance analysis, the architecture used, and group contributions, please refer to our formal paper: **[REPORT.md](docs/REPORT.md)**.
 
 ## Project Demo
+
 A demo webapp showcasing identity grouping on uploaded face crops is available online at [clusteringdemo.vercel.app](https://clusteringdemo.vercel.app);
-or locally at `demo/app.py`.
-The app expects a local `demo/best.pt`, but if the file is missing it will download it automatically from the Hugging Face model repo `C0MPLX/triplet`.
-Run it locally with:
-
-```bash
-conda env create -f demo/environment_streamlit.yml
-conda activate streamlit-env
-streamlit run demo/app.py
-```
-
-If you want to use a different checkpoint, set `DEMO_MODEL_REPO_ID` and `DEMO_MODEL_FILENAME` before launching Streamlit.
-
-This first version assumes the uploaded images are already cropped around a single face.
 
 ## 🛠 Technical Reproducibility
 
@@ -55,7 +43,8 @@ Or use the provided download script:
 python src/datasets/download_casia.py
 ```
 
->Note that this script requires a file named `credentials.json` with your kaggle API credentials in the project root:
+> Note that this script requires a file named `credentials.json` with your kaggle API credentials in the project root:
+
 ```json
 {
   "username": "your_kaggle_username",
@@ -84,19 +73,23 @@ python src/datasets/make_split.py --data-root data/casia-webface --output data/s
 ```
 
 ### 2. Network Training
+
 Provide the **exact commands** to start the training.
 
 **Baseline Training:**
+
 ```bash
 python -m src.training.train --config experiments/configs/base.yaml
 ```
 
 **Improved Model Training:**
+
 ```bash
 python -m src.training.train --config experiments/configs/triplet_hardmining.yaml
 ```
 
 **On the cluster:**
+
 ```bash
 bash cluster/train.sh
 # or, to submit training + evaluation together
@@ -104,6 +97,7 @@ bash cluster/run_all.sh --config=experiments/configs/triplet_hardmining.yaml
 ```
 
 ### 3. Evaluation
+
 Provide the commands to reproduce the numbers in your summary table.
 
 ```bash
